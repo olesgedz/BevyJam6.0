@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Bevy WASM Example</title>
+    <style> html, body, canvas { margin: 0; padding: 0; width: 100%; height: 100%; } </style>
+<link rel="modulepreload" href="./bevy_jam6-496cc24f177df016.js" crossorigin="anonymous" integrity="sha384-Wt285420oqhJXSLeCzBIcBxt8r7bcnCwAcPSos59vM5C0fysViuDmEtjs0di2QNl"><link rel="preload" href="./bevy_jam6-496cc24f177df016_bg.wasm" crossorigin="anonymous" integrity="sha384-bfEvxGgN1eKiyHJ5fm3gR7TH9NFpjNtpfV85h2p7upVfrMVto0wrcUVoy56+Y+/2" as="fetch" type="application/wasm"></head>
+<body>
+<script type="module">
+    // import init from './bevy_wasm_example.js';
+    // init();
+</script>
+
+<script type="module">
+import init, * as bindings from './bevy_jam6-496cc24f177df016.js';
+const wasm = await init({ module_or_path: './bevy_jam6-496cc24f177df016_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script></body>
+</html>
