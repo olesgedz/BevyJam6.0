@@ -1,13 +1,14 @@
 use bevy::{
+    log::{self, LogPlugin},
     prelude::*,
     render::{
+        Render, RenderApp, RenderSet,
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_asset::{RenderAssetUsages, RenderAssets},
         render_graph::{self, RenderGraph, RenderLabel},
         render_resource::{binding_types::texture_storage_2d, *},
         renderer::{RenderContext, RenderDevice},
         texture::GpuImage,
-        Render, RenderApp, RenderSet
     },
 };
 
@@ -22,6 +23,7 @@ const SIZE: (u32, u32) = (1280 / DISPLAY_FACTOR, 720 / DISPLAY_FACTOR);
 const WORKGROUP_SIZE: u32 = 8;
 
 fn main() {
+    log::debug!("START");
     App::new()
         .insert_resource(ClearColor(Color::BLACK))
         .add_plugins((
@@ -39,6 +41,11 @@ fn main() {
                     }),
                     ..default()
                 })
+                .set(LogPlugin {
+                    filter: "info,wgpu_core=warn,wgpu_hal=warn,bevy_jam6=debug".into(),
+                    level: bevy::log::Level::DEBUG,
+                    ..default()
+                })
                 .set(ImagePlugin::default_nearest()),
             GameOfLifeComputePlugin,
         ))
@@ -48,6 +55,7 @@ fn main() {
 }
 
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+    log::debug!("SETUP");
     let mut image = Image::new_fill(
         Extent3d {
             width: SIZE.0,
@@ -78,6 +86,27 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         texture_a: image0,
         texture_b: image1,
     });
+
+    commands.spawn((
+        // Accepts a `String` or any type that converts into a `String`, such as `&str`
+        Text::new("hello\nbevy!"),
+        TextFont {
+            // This font is loaded and will be used instead of the default font.
+            //font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+            font_size: 67.0,
+            ..default()
+        },
+        TextShadow::default(),
+        // Set the justification of the Text
+        TextLayout::new_with_justify(JustifyText::Center),
+        // Set the style of the Node itself.
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(5.0),
+            right: Val::Px(5.0),
+            ..default()
+        },
+    ));
 }
 
 // Switch texture to display every frame to show the one that was written to most recently.
@@ -96,6 +125,7 @@ struct GameOfLifeLabel;
 
 impl Plugin for GameOfLifeComputePlugin {
     fn build(&self, app: &mut App) {
+        log::debug!("Build GOF plugin");
         // Extract the game of life image resource from the main world into the render world
         // for operation on by the compute shader and display on the sprite.
         app.add_plugins(ExtractResourcePlugin::<GameOfLifeImages>::default());
@@ -132,6 +162,7 @@ fn prepare_bind_group(
     game_of_life_images: Res<GameOfLifeImages>,
     render_device: Res<RenderDevice>,
 ) {
+    log::debug!("Prepare bind group");
     let view_a = gpu_images.get(&game_of_life_images.texture_a).unwrap();
     let view_b = gpu_images.get(&game_of_life_images.texture_b).unwrap();
     let bind_group_0 = render_device.create_bind_group(
@@ -156,7 +187,10 @@ struct GameOfLifePipeline {
 
 impl FromWorld for GameOfLifePipeline {
     fn from_world(world: &mut World) -> Self {
+        log::debug!("pipeline from world");
         let render_device = world.resource::<RenderDevice>();
+        log::debug!("WGPU Render device {:?}", render_device.wgpu_device());
+        log::debug!("Render device features {:?}", render_device.features());
         let texture_bind_group_layout = render_device.create_bind_group_layout(
             "GameOfLifeImages",
             &BindGroupLayoutEntries::sequential(
@@ -167,6 +201,7 @@ impl FromWorld for GameOfLifePipeline {
                 ),
             ),
         );
+        log::debug!("After bind group layout");
         let shader = world.load_asset(SHADER_ASSET_PATH);
         let pipeline_cache = world.resource::<PipelineCache>();
         let init_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
@@ -289,3 +324,4 @@ impl render_graph::Node for GameOfLifeNode {
         Ok(())
     }
 }
+
