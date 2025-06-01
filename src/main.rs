@@ -1,8 +1,19 @@
+mod terrain;
+
 use bevy::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
 use bevy::sprite::{Wireframe2dConfig, Wireframe2dPlugin};
 
 fn main() {
+    //Debug terrain generation
+    let generator = terrain::TerrainGenerator::new(42);// The meaning of life, the universe, and everything
+    let terrain = generator.generate(100, 100, 4, 20.0);
+    println!("Altitude Map:");
+    terrain::TerrainGenerator::print_map(&terrain, 0);
+    println!("Temperature Map:");
+    terrain::TerrainGenerator::print_map(&terrain, 1);
+    println!("Terrain generation complete. How does it look?");
+
     let mut app = App::new();
     app.add_plugins((
         DefaultPlugins,
