@@ -1,3 +1,5 @@
+mod menu;
+
 use bevy::{
     log::{self, LogPlugin},
     prelude::*,
@@ -14,8 +16,8 @@ use bevy::{
 
 // use bevy::render::renderer::*;
 use std::borrow::Cow;
-
-/// This example uses a shader source file from the assets subdirectory
+use menu::menu::*;
+use menu::*;
 const SHADER_ASSET_PATH: &str = "shaders/game_of_life.wgsl";
 
 const DISPLAY_FACTOR: u32 = 4;
@@ -25,7 +27,6 @@ const WORKGROUP_SIZE: u32 = 8;
 fn main() {
     log::debug!("START");
     App::new()
-        .insert_resource(ClearColor(Color::BLACK))
         .add_plugins((
             DefaultPlugins
                 .set(WindowPlugin {
@@ -47,66 +48,75 @@ fn main() {
                     ..default()
                 })
                 .set(ImagePlugin::default_nearest()),
-            GameOfLifeComputePlugin,
+            // GameOfLifeComputePlugin,
         ))
+        .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(DisplayQuality::Medium)
+        .insert_resource(Volume(7))
+        // Declare the game state, whose starting value is determined by the `Default` trait
+        .init_state::<GameState>()
         .add_systems(Startup, setup)
-        .add_systems(Update, switch_textures)
+        // .add_systems(Update, switch_textures)
+        .add_plugins((splash::splash_plugin, menu_plugin, game::game_plugin))
         .run();
 }
 
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     log::debug!("SETUP");
-    let mut image = Image::new_fill(
-        Extent3d {
-            width: SIZE.0,
-            height: SIZE.1,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        &[0, 0, 0, 255],
-        TextureFormat::R32Float,
-        RenderAssetUsages::RENDER_WORLD,
-    );
-    image.texture_descriptor.usage =
-        TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
-    let image0 = images.add(image.clone());
-    let image1 = images.add(image);
 
-    commands.spawn((
-        Sprite {
-            image: image0.clone(),
-            custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
-            ..default()
-        },
-        Transform::from_scale(Vec3::splat(DISPLAY_FACTOR as f32)),
-    ));
     commands.spawn(Camera2d);
-
-    commands.insert_resource(GameOfLifeImages {
-        texture_a: image0,
-        texture_b: image1,
-    });
-
-    commands.spawn((
-        // Accepts a `String` or any type that converts into a `String`, such as `&str`
-        Text::new("hello\nbevy!"),
-        TextFont {
-            // This font is loaded and will be used instead of the default font.
-            //font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-            font_size: 67.0,
-            ..default()
-        },
-        TextShadow::default(),
-        // Set the justification of the Text
-        TextLayout::new_with_justify(JustifyText::Center),
-        // Set the style of the Node itself.
-        Node {
-            position_type: PositionType::Absolute,
-            bottom: Val::Px(5.0),
-            right: Val::Px(5.0),
-            ..default()
-        },
-    ));
+    
+    // 
+    // let mut image = Image::new_fill(
+    //     Extent3d {
+    //         width: SIZE.0,
+    //         height: SIZE.1,
+    //         depth_or_array_layers: 1,
+    //     },
+    //     TextureDimension::D2,
+    //     &[0, 0, 0, 255],
+    //     TextureFormat::R32Float,
+    //     RenderAssetUsages::RENDER_WORLD,
+    // );
+    // image.texture_descriptor.usage =
+    //     TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
+    // let image0 = images.add(image.clone());
+    // let image1 = images.add(image);
+    // 
+    // commands.spawn((
+    //     Sprite {
+    //         image: image0.clone(),
+    //         custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
+    //         ..default()
+    //     },
+    //     Transform::from_scale(Vec3::splat(DISPLAY_FACTOR as f32)),
+    // ));
+    // 
+    // commands.insert_resource(GameOfLifeImages {
+    //     texture_a: image0,
+    //     texture_b: image1,
+    // });
+    // 
+    // commands.spawn((
+    //     // Accepts a `String` or any type that converts into a `String`, such as `&str`
+    //     Text::new("hello\nbevy!"),
+    //     TextFont {
+    //         // This font is loaded and will be used instead of the default font.
+    //         //font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+    //         font_size: 67.0,
+    //         ..default()
+    //     },
+    //     TextShadow::default(),
+    //     // Set the justification of the Text
+    //     TextLayout::new_with_justify(JustifyText::Center),
+    //     // Set the style of the Node itself.
+    //     Node {
+    //         position_type: PositionType::Absolute,
+    //         bottom: Val::Px(5.0),
+    //         right: Val::Px(5.0),
+    //         ..default()
+    //     },
+    // ));
 }
 
 // Switch texture to display every frame to show the one that was written to most recently.
@@ -324,4 +334,3 @@ impl render_graph::Node for GameOfLifeNode {
         Ok(())
     }
 }
-
