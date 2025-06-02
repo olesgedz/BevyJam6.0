@@ -34,7 +34,7 @@ impl Plugin for GameOfLifeComputePlugin {
         // Extract the game of life image resource from the main world into the render world
         // for operation on by the compute shader and display on the sprite
         app.add_plugins(ExtractResourcePlugin::<GameOfLifeImages>::default());
-        app.add_systems(Startup, setup_game)
+        app.add_systems(OnEnter(GameState::Game), setup_game)
         
         .add_systems(Update, game_update.run_if(in_state(GameState::Game)))
         .add_systems(OnExit(GameState::Game), cleanup_game);
