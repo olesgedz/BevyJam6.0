@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_life::{ConwayCellState, GameOfLife2dPlugin, MooreCell2d, SimulationBatch};
-use rand::{Rng};
+use rand::Rng;
 
 fn main() {
     App::new()

@@ -12,4 +12,13 @@ opt-level = 1
 opt-level = 3
 
 [dependencies]
-bevy = {version = "0.16.1", features = ["bevy_winit", "webgpu", "bevy_render", "bevy_core_pipeline"]}
+# webgpu is necessary for compute shaders
+bevy = {version = "0.16.1", features = ["bevy_winit", "webgl2", "bevy_render", "bevy_core_pipeline"]}
+
+# For bevy_life
+getrandom = { version = "0.3", features = ["wasm_js"] }
+# For bevy_life example
+rand = "0.9"
+[dependencies.bevy_life]
+git = "https://github.com/ManevilleF/bevy_life.git"
+rev = "d2f70049d3ffda496fd01ff12bbf29e7d11f115d"
