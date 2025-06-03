@@ -23,8 +23,8 @@ use game::*;
 
 fn main() {
     log::debug!("START");
-    App::new()
-        .add_plugins((
+    let mut app = App::new();
+        app.add_plugins((
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
@@ -46,14 +46,15 @@ fn main() {
                 })
                 .set(ImagePlugin::default_nearest()),
         ))
+        .init_state::<GameState>()
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(DisplayQuality::Medium)
         .insert_resource(Volume(7))
         // Declare the game state, whose starting value is determined by the `Default` trait
-        .init_state::<GameState>()
         .add_systems(Startup, setup)
-        .add_plugins((splash::splash_plugin, menu_plugin, GameOfLifeComputePlugin))
-        .run();
+        .add_plugins((splash::splash_plugin, menu_plugin, GameOfLifeComputePlugin));
+    
+        app.run();
 }
 
 fn setup(mut commands: Commands) {

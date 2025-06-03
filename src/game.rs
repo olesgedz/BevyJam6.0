@@ -15,6 +15,7 @@ use bevy::{
 
 use crate::menu::*;
 use std::borrow::Cow;
+use crate::menu::GameState::Game;
 
 const SHADER_ASSET_PATH: &str = "shaders/game_of_life.wgsl";
 
@@ -28,14 +29,17 @@ pub struct GameOfLifeComputePlugin;
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 struct GameOfLifeLabel;
 
+#[derive(Resource)]
+struct RenderFlag(bool);
+
 impl Plugin for GameOfLifeComputePlugin {
     fn build(&self, app: &mut App) {
         log::debug!("Build GOF plugin");
         // Extract the game of life image resource from the main world into the render world
         // for operation on by the compute shader and display on the sprite
         app.add_plugins(ExtractResourcePlugin::<GameOfLifeImages>::default());
-        app.add_systems(OnEnter(GameState::Game), setup_game)
-        
+        app.add_systems(OnEnter(GameState::Splash), setup_game);
+        app.insert_resource(RenderFlag(true))
         .add_systems(Update, game_update.run_if(in_state(GameState::Game)))
         .add_systems(OnExit(GameState::Game), cleanup_game);
         let render_app = app.sub_app_mut(RenderApp);
@@ -48,7 +52,6 @@ impl Plugin for GameOfLifeComputePlugin {
         render_graph.add_node(GameOfLifeLabel, GameOfLifeNode::default());
         render_graph.add_node_edge(GameOfLifeLabel, bevy::render::graph::CameraDriverLabel);
     }
-
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
         render_app.init_resource::<GameOfLifePipeline>();
@@ -146,7 +149,7 @@ fn prepare_bind_group(
     game_of_life_images: Res<GameOfLifeImages>,
     render_device: Res<RenderDevice>,
 ) {
-    log::debug!("Prepare bind group");
+    // log::debug!("Prepare bind group");
     let view_a = gpu_images.get(&game_of_life_images.texture_a).unwrap();
     let view_b = gpu_images.get(&game_of_life_images.texture_b).unwrap();
     let bind_group_0 = render_device.create_bind_group(
@@ -274,8 +277,19 @@ impl render_graph::Node for GameOfLifeNode {
         &self,
         _graph: &mut render_graph::RenderGraphContext,
         render_context: &mut RenderContext,
-        world: &World,
+        world: &World, 
     ) -> Result<(), render_graph::NodeRunError> {
+        // let state = world.get_resource::<State<GameState>>().unwrap();
+        // println!("GameOfLifeNode run in state: {:?}", state.get());
+        let game_state = world.get_resource::<RenderFlag>() else {
+            bevy::log::warn!("GameState not found in World yet.");
+            return Ok(()); // Skip until it's available
+        };
+        if !game_state.unwrap().0 {
+            // If the game state is not active, skip rendering
+            return Ok(());
+        }
+        // Skip rendering if we're not in the right state
         let bind_groups = &world.resource::<GameOfLifeImageBindGroups>().0;
         let pipeline_cache = world.resource::<PipelineCache>();
         let pipeline = world.resource::<GameOfLifePipeline>();
