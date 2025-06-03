@@ -1,5 +1,5 @@
 use bevy::{
-    log::{self, LogPlugin},
+    log::self,
     prelude::*,
     render::{
         Render, RenderApp, RenderSet,
@@ -12,16 +12,16 @@ use bevy::{
     },
 };
 
-
+use crate::SharedGameState;
 use crate::menu::*;
 use std::borrow::Cow;
+use std::sync::{Arc, Mutex};
 
 const SHADER_ASSET_PATH: &str = "shaders/game_of_life.wgsl";
 
 pub const DISPLAY_FACTOR: u32 = 4;
 pub const SIZE: (u32, u32) = (1280 / DISPLAY_FACTOR, 720 / DISPLAY_FACTOR);
 const WORKGROUP_SIZE: u32 = 8;
-
 
 pub struct GameOfLifeComputePlugin;
 
@@ -31,32 +31,31 @@ struct GameOfLifeLabel;
 impl Plugin for GameOfLifeComputePlugin {
     fn build(&self, app: &mut App) {
         log::debug!("Build GOF plugin");
+        let shared = Arc::new(Mutex::new(GameState::Splash));
         // Extract the game of life image resource from the main world into the render world
         // for operation on by the compute shader and display on the sprite
         app.add_plugins(ExtractResourcePlugin::<GameOfLifeImages>::default());
-        app.add_systems(Startup, setup_game)
-        
-        .add_systems(Update, game_update.run_if(in_state(GameState::Game)))
-        .add_systems(OnExit(GameState::Game), cleanup_game);
+        app.add_systems(OnEnter(GameState::Splash), setup_game);
+        app.add_systems(Update, game_update.run_if(in_state(GameState::Game)))
+            .add_systems(OnExit(GameState::Game), cleanup_game);
+        app.insert_resource(SharedGameState(shared.clone()));
         let render_app = app.sub_app_mut(RenderApp);
         render_app.add_systems(
             Render,
             prepare_bind_group.in_set(RenderSet::PrepareBindGroups),
         );
-        
+        render_app.insert_resource(SharedGameState(shared.clone()));
         let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
         render_graph.add_node(GameOfLifeLabel, GameOfLifeNode::default());
         render_graph.add_node_edge(GameOfLifeLabel, bevy::render::graph::CameraDriverLabel);
     }
-
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
         render_app.init_resource::<GameOfLifePipeline>();
     }
 }
 
-fn setup_game(mut commands: Commands,  mut images: ResMut<Assets<Image>>) {
-    
+fn setup_game(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let mut image = Image::new_fill(
         Extent3d {
             width: SIZE.0,
@@ -72,7 +71,7 @@ fn setup_game(mut commands: Commands,  mut images: ResMut<Assets<Image>>) {
         TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
     let image0 = images.add(image.clone());
     let image1 = images.add(image);
-    
+
     commands.spawn((
         Sprite {
             image: image0.clone(),
@@ -81,12 +80,12 @@ fn setup_game(mut commands: Commands,  mut images: ResMut<Assets<Image>>) {
         },
         Transform::from_scale(Vec3::splat(DISPLAY_FACTOR as f32)),
     ));
-    
+
     commands.insert_resource(GameOfLifeImages {
         texture_a: image0,
         texture_b: image1,
     });
-    
+
     commands.spawn((
         // Accepts a `String` or any type that converts into a `String`, such as `&str`
         Text::new("hello\nbevy!"),
@@ -114,10 +113,9 @@ fn game_update(images: Res<GameOfLifeImages>, sprite: Single<&mut Sprite>) {
     switch_textures(images, sprite);
 }
 
-fn cleanup_game(mut commands: Commands) {
+fn cleanup_game(_commands: Commands) {
     // Despawn game entities
 }
-
 
 // Switch texture to display every frame to show the one that was written to most recently.
 fn switch_textures(images: Res<GameOfLifeImages>, mut sprite: Single<&mut Sprite>) {
@@ -127,8 +125,6 @@ fn switch_textures(images: Res<GameOfLifeImages>, mut sprite: Single<&mut Sprite
         sprite.image = images.texture_a.clone_weak();
     }
 }
-
-
 
 #[derive(Resource, Clone, ExtractResource)]
 struct GameOfLifeImages {
@@ -146,7 +142,7 @@ fn prepare_bind_group(
     game_of_life_images: Res<GameOfLifeImages>,
     render_device: Res<RenderDevice>,
 ) {
-    log::debug!("Prepare bind group");
+    // log::debug!("Prepare bind group");
     let view_a = gpu_images.get(&game_of_life_images.texture_a).unwrap();
     let view_b = gpu_images.get(&game_of_life_images.texture_b).unwrap();
     let bind_group_0 = render_device.create_bind_group(
@@ -257,7 +253,12 @@ impl render_graph::Node for GameOfLifeNode {
                 if let CachedPipelineState::Ok(_) =
                     pipeline_cache.get_compute_pipeline_state(pipeline.update_pipeline)
                 {
-                    self.state = GameOfLifeState::Update(1);
+                    if let Some(result) = world.get_resource::<SharedGameState>() {
+                        let data = result.0.lock().unwrap();
+                        if *data == GameState::Game {
+                            self.state = GameOfLifeState::Update(1);
+                        }
+                    };
                 }
             }
             GameOfLifeState::Update(0) => {
@@ -276,6 +277,8 @@ impl render_graph::Node for GameOfLifeNode {
         render_context: &mut RenderContext,
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
+
+        // Skip rendering if we're not in the right state
         let bind_groups = &world.resource::<GameOfLifeImageBindGroups>().0;
         let pipeline_cache = world.resource::<PipelineCache>();
         let pipeline = world.resource::<GameOfLifePipeline>();
@@ -304,7 +307,6 @@ impl render_graph::Node for GameOfLifeNode {
                 pass.dispatch_workgroups(SIZE.0 / WORKGROUP_SIZE, SIZE.1 / WORKGROUP_SIZE, 1);
             }
         }
-
         Ok(())
     }
 }
