@@ -11,5 +11,8 @@ opt-level = 1
 [profile.dev.package."*"]
 opt-level = 3
 
+[workspace]
+resolver = "2" # Important! wgpu/Bevy needs this!
+
 [dependencies]
 bevy = {version = "0.16.1", features = ["bevy_winit", "webgpu", "bevy_render", "bevy_core_pipeline"]}
