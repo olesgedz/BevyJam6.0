@@ -1,5 +1,5 @@
 use bevy::{
-    log::{self, LogPlugin},
+    log::self,
     prelude::*,
     render::{
         Render, RenderApp, RenderSet,
@@ -13,9 +13,7 @@ use bevy::{
 };
 
 use crate::SharedGameState;
-use crate::menu::GameState::Game;
 use crate::menu::*;
-use bevy::prelude::KeyCode::PrintScreen;
 use std::borrow::Cow;
 use std::sync::{Arc, Mutex};
 
@@ -29,9 +27,6 @@ pub struct GameOfLifeComputePlugin;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 struct GameOfLifeLabel;
-
-#[derive(Resource)]
-struct RenderFlag(bool);
 
 impl Plugin for GameOfLifeComputePlugin {
     fn build(&self, app: &mut App) {
@@ -118,7 +113,7 @@ fn game_update(images: Res<GameOfLifeImages>, sprite: Single<&mut Sprite>) {
     switch_textures(images, sprite);
 }
 
-fn cleanup_game(mut commands: Commands) {
+fn cleanup_game(_commands: Commands) {
     // Despawn game entities
 }
 

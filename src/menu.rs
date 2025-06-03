@@ -40,7 +40,7 @@ pub mod splash {
             .add_systems(OnEnter(GameState::Game), change_shared_data);
     }
 
-    fn change_shared_data(mut shared_state: Res<SharedGameState>) {
+    fn change_shared_data(shared_state: Res<SharedGameState>) {
         let mut  state = shared_state.0.lock().unwrap();
         *state = GameState::Game;
     }
