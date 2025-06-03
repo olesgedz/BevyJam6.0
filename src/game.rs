@@ -10,7 +10,10 @@ use bevy::{
         renderer::{RenderContext, RenderDevice},
         texture::GpuImage,
     },
+    input::*
 };
+use bevy::ecs::system::{Res, ResMut, Query};
+use bevy::window::Window;
 
 use crate::SharedGameState;
 use crate::menu::*;
@@ -39,6 +42,7 @@ impl Plugin for GameOfLifeComputePlugin {
         app.add_systems(Update, game_update.run_if(in_state(GameState::Game)))
             .add_systems(OnExit(GameState::Game), cleanup_game);
         app.insert_resource(SharedGameState(shared.clone()));
+        app.add_systems(Update, handle_mouse_click);
         let render_app = app.sub_app_mut(RenderApp);
         render_app.add_systems(
             Render,
@@ -56,7 +60,7 @@ impl Plugin for GameOfLifeComputePlugin {
 }
 
 fn setup_game(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
-    let mut image = Image::new_fill(
+    let mut image_a = Image::new_fill(
         Extent3d {
             width: SIZE.0,
             height: SIZE.1,
@@ -67,10 +71,23 @@ fn setup_game(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         TextureFormat::R32Float,
         RenderAssetUsages::RENDER_WORLD,
     );
-    image.texture_descriptor.usage =
+    image_a.texture_descriptor.usage =
         TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
-    let image0 = images.add(image.clone());
-    let image1 = images.add(image);
+    let mut image_b = Image::new_fill(
+        Extent3d {
+            width: SIZE.0,
+            height: SIZE.1,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        &[0, 0, 0, 255],
+        TextureFormat::R32Float,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    image_b.texture_descriptor.usage =
+        TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
+    let image0 = images.add(image_a);
+    let image1 = images.add(image_b);
 
     commands.spawn((
         Sprite {
@@ -308,5 +325,57 @@ impl render_graph::Node for GameOfLifeNode {
             }
         }
         Ok(())
+    }
+}
+
+fn handle_mouse_click(
+    buttons: Res<ButtonInput<MouseButton>>,
+    windows: Query<&Window>,
+    camera_q: Query<(&Camera, &GlobalTransform)>,
+    mut images: ResMut<Assets<Image>>,
+    gol_images: Res<GameOfLifeImages>
+) {
+    if !buttons.just_pressed(MouseButton::Left) {
+        return;
+    }
+
+    // Get window
+    let Ok(window) = windows.single() else {
+        return;
+    };
+
+    // Get camera and transform
+    let Ok((camera, cam_transform)) = camera_q.single() else {
+        return;
+    };
+
+    // Get cursor position
+    let Some(cursor_pos) = window.cursor_position() else {
+        return;
+    };
+
+    // Convert screen-space position to world-space ray
+    let world_pos = camera.viewport_to_world(cam_transform, cursor_pos);
+
+    let world_pos = world_pos.unwrap().origin.truncate(); // Vec2
+
+    // Now convert world_pos to texture coordinate space
+    let x = (world_pos.x / DISPLAY_FACTOR as f32).floor() as u32;
+    let y = (world_pos.y / DISPLAY_FACTOR as f32).floor() as u32;
+
+    if x >= SIZE.0 || y >= SIZE.1 {
+        return;
+    }
+    println!("All image handles:");
+    for (handle_id, _) in images.iter() {
+        println!(" - {:?}", handle_id);
+    }
+    println!("Looking for: {:?}", gol_images.texture_a.id());
+    // Modify the texture
+    if let Some(image) = images.get_mut(&gol_images.texture_a) {
+        if let Some(data) = image.data.as_mut() {
+            let index = (y * SIZE.0 + x) * 4;
+            data[index as usize] = 1; // mark as alive
+        }
     }
 }

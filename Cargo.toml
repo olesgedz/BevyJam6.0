@@ -13,3 +13,4 @@ opt-level = 3
 
 [dependencies]
 bevy = {version = "0.16.1", features = ["bevy_winit", "webgpu", "bevy_render", "bevy_core_pipeline"]}
+bytemuck = "1.23.0"
