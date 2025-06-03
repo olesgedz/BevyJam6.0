@@ -14,12 +14,17 @@ use bevy::{
         texture::GpuImage,
     },
 };
-
+use std::sync::{Arc, Mutex};
 // use bevy::render::renderer::*;
 use std::borrow::Cow;
 use menu::menu::*;
 use menu::*;
 use game::*;
+
+
+
+#[derive(Resource, Clone, Debug)]
+struct SharedGameState(Arc<Mutex<GameState>>);
 
 fn main() {
     log::debug!("START");

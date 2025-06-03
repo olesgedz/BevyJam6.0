@@ -24,7 +24,7 @@ pub struct Volume(pub u32);
 
 pub mod splash {
     use bevy::prelude::*;
-
+    use crate::SharedGameState;
     use super::{despawn_screen, GameState};
 
     // This plugin will display a splash screen with Bevy logo for 1 second before switching to the menu
@@ -36,9 +36,15 @@ pub mod splash {
             // While in this state, run the `countdown` system
             .add_systems(Update, countdown.run_if(in_state(GameState::Splash)))
             // When exiting the state, despawn everything that was spawned for this screen
-            .add_systems(OnExit(GameState::Splash), despawn_screen::<OnSplashScreen>);
+            .add_systems(OnExit(GameState::Splash), despawn_screen::<OnSplashScreen>)
+            .add_systems(OnEnter(GameState::Game), change_shared_data);
     }
 
+    fn change_shared_data(mut shared_state: Res<SharedGameState>) {
+        let mut  state = shared_state.0.lock().unwrap();
+        *state = GameState::Game;
+    }
+    
     // Tag component used to tag entities added on the splash screen
     #[derive(Component)]
     struct OnSplashScreen;
