@@ -35,6 +35,7 @@
         # openssl
         # openssl.dev
         # Lightweight image viewer
+        wgsl-analyzer
         feh
         llvmPackages_17.clangUseLLVM
         llvmPackages_17.bintools
