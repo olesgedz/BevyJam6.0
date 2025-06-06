@@ -188,8 +188,8 @@ fn calculate_new_cell(pos: vec2<i32>) -> Cell {
   }
 
   // Update smell
-  new_cell.human_smell = ((neighbor_human_smell / 8) + new_human_smell) / 2;
-  new_cell.zombie_smell = ((neighbor_zombie_smell / 8) + new_zombie_smell) / 2;
+  new_cell.human_smell = cell.human_smell + neighbor_human_smell / 8 + new_human_smell;
+  new_cell.zombie_smell = cell.zombie_smell + neighbor_zombie_smell / 8 + new_zombie_smell;
 
   // Movement logic for humans
   if cell.status == 1 {
