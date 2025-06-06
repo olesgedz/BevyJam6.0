@@ -3,10 +3,12 @@
 //! Compute shaders use the GPU for computing arbitrary information, that may be independent of what
 //! is rendered to the screen.
 
+mod constants;
+mod map_gen;
+mod terrain;
+
 use bevy::{
-  color::palettes::css::{GREEN, ROYAL_BLUE, SANDY_BROWN},
-  prelude::*,
-  render::{
+  color::palettes::css::{GREEN, ROYAL_BLUE, SANDY_BROWN}, log::{self, LogPlugin}, prelude::*, render::{
     extract_resource::{ExtractResource, ExtractResourcePlugin}, render_asset::{RenderAssetUsages, RenderAssets}, render_graph::{self, RenderGraph, RenderLabel}, render_resource::{
       binding_types::{
         storage_buffer, storage_buffer_read_only, texture_storage_2d,
@@ -14,25 +16,23 @@ use bevy::{
       },
       *,
     }, renderer::{RenderContext, RenderDevice}, storage::{GpuShaderStorageBuffer, ShaderStorageBuffer}, texture::GpuImage, Render, RenderApp, RenderSet
-  },
+  }
 };
+use rand::Rng;
+use bytemuck::{Pod, Zeroable};
+use map_gen::CellState;
 use std::borrow::Cow;
-
-/// This example uses a shader source file from the assets subdirectory
-const SHADER_ASSET_PATH: &str = "shaders/zombie.wgsl";
-
-const DISPLAY_FACTOR: u32 = 4;
-// do this once I have override working
-//const SIZE: (u32, u32) = (1280 / DISPLAY_FACTOR, 720 / DISPLAY_FACTOR);
-const SIZE: (u32, u32) = (200, 200);
-const WORKGROUP_SIZE: u32 = 8;
-const BUFFER_LEN: usize = (SIZE.0 * SIZE.1) as usize;
+use constants::*;
 
 fn main() {
   App::new()
     .insert_resource(ClearColor(Color::BLACK))
     .add_plugins((
       DefaultPlugins
+      .set(LogPlugin {
+        filter: "warn,bevy_jam6=debug".to_string(),
+        ..default()
+      })
         .set(WindowPlugin {
           primary_window: Some(Window {
             resolution: (
@@ -50,8 +50,21 @@ fn main() {
       ZombieComputePlugin,
     ))
     .add_systems(Startup, setup)
-    //.add_systems(Update, )
+    .add_systems(Update, switch_textures)
     .run();
+}
+
+
+// Switch texture to display every frame to show the one that was written to most recently.
+//
+// We need to switch because the GPU doesn't like writing and then reading from the same
+// board multiple times in a frame.
+fn switch_textures(buffers: Res<BoardBuffers>, mut sprite: Single<&mut Sprite>) {
+    if sprite.image == buffers.image_a {
+        sprite.image = buffers.image_b.clone_weak();
+    } else {
+        sprite.image = buffers.image_a.clone_weak();
+    }
 }
 
 fn make_live(buffer: &mut Vec<u32>, points: &[(usize,usize)]) {
@@ -73,17 +86,16 @@ fn setup(
       },
       TextureDimension::D2,
       &[0, 0, 0, 255],
-      TextureFormat::R32Float,
+      TextureFormat::Rgba8Unorm,
       RenderAssetUsages::RENDER_WORLD,
   );
   image.texture_descriptor.usage =
-      TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
-  //let image0 = images.add(image.clone());
-  let image_handle = images.add(image);
-  let mut blank_buffer = vec![0u32; BUFFER_LEN];
-  make_live(&mut blank_buffer, &[
-    (1,0), (1,2), (0,1), (2,1)
-  ]);
+      TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT;
+  let image_handle_a = images.add(image.clone());
+  let image_handle_b = images.add(image);
+  let mut blank_buffer = map_gen::generate_map();
+  let humans = blank_buffer.iter().filter(|cell| cell.stored_status == 1).count();
+  log::debug!("human count {}", humans);
   let mut buffer = ShaderStorageBuffer::from(blank_buffer);
   buffer.buffer_description.usage =
     BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE;
@@ -94,7 +106,7 @@ fn setup(
   let buffer1 = buffers.add(buffer);
   commands.spawn((
         Sprite {
-            image: image_handle.clone(),
+            image: image_handle_a.clone(),
             custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
             ..default()
         },
@@ -106,7 +118,8 @@ fn setup(
   commands.insert_resource(BoardBuffers {
     board_a: buffer0,
     board_b: buffer1,
-    image_out: image_handle
+    image_a: image_handle_a,
+    image_b: image_handle_b
   });
 }
 
@@ -204,7 +217,8 @@ impl Plugin for ZombieComputePlugin {
 struct BoardBuffers {
   board_a: Handle<ShaderStorageBuffer>,
   board_b: Handle<ShaderStorageBuffer>,
-  image_out: Handle<Image>
+  image_a: Handle<Image>,
+  image_b: Handle<Image>,
 }
 
 // The way the pipeline works, we give the pipeline a list
@@ -223,18 +237,19 @@ fn prepare_bind_group(
   board_buffers: Res<BoardBuffers>,
   render_device: Res<RenderDevice>,
 ) {
-  let view_a = gpu_buffers.get(&board_buffers.board_a).unwrap();
-  let view_b = gpu_buffers.get(&board_buffers.board_b).unwrap();
-  let image_out = gpu_images.get(&board_buffers.image_out).unwrap();
+  let view_a = gpu_buffers.get(&board_buffers.board_a).expect("board a buffer");
+  let view_b = gpu_buffers.get(&board_buffers.board_b).expect("board b buffer");
+  let image_a = gpu_images.get(&board_buffers.image_a).expect("image out buffer");
+  let image_b = gpu_images.get(&board_buffers.image_b).expect("image out buffer");
   let bind_group_0 = render_device.create_bind_group(
     None,
     &pipeline.texture_bind_group_layout,
-    &BindGroupEntries::sequential((view_a.buffer.as_entire_binding(), view_b.buffer.as_entire_binding(), &image_out.texture_view)),
+    &BindGroupEntries::sequential((view_a.buffer.as_entire_binding(), view_b.buffer.as_entire_binding(), &image_a.texture_view)),
   );
   let bind_group_1 = render_device.create_bind_group(
     None,
     &pipeline.texture_bind_group_layout,
-    &BindGroupEntries::sequential((view_b.buffer.as_entire_binding(), view_a.buffer.as_entire_binding(), &image_out.texture_view)),
+    &BindGroupEntries::sequential((view_b.buffer.as_entire_binding(), view_a.buffer.as_entire_binding(), &image_b.texture_view)),
   );
   commands.insert_resource(ZombieBoardBindGroups([bind_group_0, bind_group_1]));
 }
@@ -254,13 +269,13 @@ impl FromWorld for GameOfLifePipeline {
       &BindGroupLayoutEntries::sequential(
         ShaderStages::COMPUTE,
         (
-          storage_buffer_read_only::<Vec<i32>>(false),
-          storage_buffer::<Vec<i32>>(false),
+          storage_buffer_read_only::<Vec<CellState>>(false),
+          storage_buffer::<Vec<CellState>>(false),
           // see https://docs.rs/bevy/latest/src/custom_post_processing/custom_post_processing.rs.html#302-307
           //uniform_buffer::<WidthSettings>(true),
           // old
           //texture_storage_2d(TextureFormat::R32Float, StorageTextureAccess::ReadOnly),
-          texture_storage_2d(TextureFormat::R32Float, StorageTextureAccess::WriteOnly),
+          texture_storage_2d(TextureFormat::Rgba8Unorm, StorageTextureAccess::WriteOnly),
         ),
       ),
     );

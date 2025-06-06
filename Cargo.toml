@@ -14,9 +14,11 @@ opt-level = 3
 [dependencies]
 # webgpu is necessary for compute shaders
 bevy = {version = "0.16.1", features = ["bevy_winit", "webgl2", "bevy_render", "bevy_core_pipeline"]}
+bytemuck = "1.23.0"
 
 # For bevy_life
 getrandom = { version = "0.3", features = ["wasm_js"] }
+noise = "0.9.0"
 # For bevy_life example
 rand = "0.9"
 [dependencies.bevy_life]
