@@ -146,6 +146,21 @@ fn neighbor_with_most_human_smell(pos: vec2<i32>) -> vec2<i32> {
   return max_dir;
 }
 
+// Helper function to find the direction with the least zombie smell
+fn neighbor_with_least_zombie_smell(pos: vec2<i32>) -> vec2<i32> {
+  var min_dir = vec2<i32>();
+  var min_smell = i32(1 << 30); // A large number to initialize
+  for (var i = 0; i < 8; i++) {
+    let cell = load(pos + directions[i]);
+    if cell.zombie_smell < min_smell {
+      min_dir = directions[i];
+      min_smell = cell.zombie_smell;
+    }
+  }
+  return min_dir;
+}
+
+// Updated calculate_new_cell function
 fn calculate_new_cell(pos: vec2<i32>) -> Cell {
   let cell = load(pos);
   var new_cell = cell;
@@ -156,7 +171,8 @@ fn calculate_new_cell(pos: vec2<i32>) -> Cell {
   let neighbor_zombie_smell = totals.w;
   var new_human_smell = 0;
   var new_zombie_smell = 0;
-  // simplified from the full rules for testing
+
+  // Simplified rules for population changes
   if humans == zombies {
     new_cell.population = 0;
     new_cell.status = 0;
@@ -165,22 +181,34 @@ fn calculate_new_cell(pos: vec2<i32>) -> Cell {
     new_cell.status = 1;
     new_human_smell = new_cell.population;
   } else {
-    // to represent infection
+    // To represent infection
     new_cell.population = zombies - humans + humans / 3;
     new_cell.status = 2;
     new_zombie_smell = new_cell.population;
   }
 
-  // we're skipping birth rate
-  
-  // update smell and noise.
-  new_cell.human_smell = (neighbor_human_smell / 8) + new_human_smell;
-  new_cell.zombie_smell = (neighbor_zombie_smell / 8) + new_zombie_smell;
+  // Update smell
+  new_cell.human_smell = ((neighbor_human_smell / 8) + new_human_smell) / 2;
+  new_cell.zombie_smell = ((neighbor_zombie_smell / 8) + new_zombie_smell) / 2;
 
-  // movement is simplified as well
-  let dir = neighbor_with_most_human_smell(pos);
-  new_cell.direction_x = dir.x;
-  new_cell.direction_y = dir.y;
+  // Movement logic for humans
+  if cell.status == 1 {
+    //if zombies > humans {
+      // Move to the cell with the least zombie smell
+      let dir = neighbor_with_least_zombie_smell(pos);
+      new_cell.direction_x = dir.x;
+      new_cell.direction_y = dir.y;
+    /*} else {
+      // Stand ground
+      new_cell.direction_x = 0;
+      new_cell.direction_y = 0;
+    }*/
+  } else if cell.status == 2 {
+    // Movement logic for zombies (unchanged)
+    let dir = neighbor_with_most_human_smell(pos);
+    new_cell.direction_x = dir.x;
+    new_cell.direction_y = dir.y;
+  }
 
   return new_cell;
 }
