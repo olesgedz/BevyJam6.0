@@ -133,6 +133,17 @@ const directions = array<vec2<i32>,8>(
   vec2( 1,  1),
 );
 
+fn most_neighboring_zombie_smell(pos: vec2<i32>) -> i32 {
+  var max_smell = 0;
+  for (var i = 0; i < 8; i++) {
+    let cell = load(pos + directions[i]);
+    if cell.zombie_smell > max_smell {
+      max_smell = cell.zombie_smell;
+    }
+  }
+  return max_smell;
+}
+
 fn neighbor_with_most_human_smell(pos: vec2<i32>) -> vec2<i32> {
   var max_dir = vec2<i32>();
   var max_smell = 0;
@@ -177,7 +188,7 @@ fn calculate_new_cell(pos: vec2<i32>) -> Cell {
     new_cell.population = 0;
     new_cell.status = 0;
   } else if humans > zombies {
-    new_cell.population = humans - zombies;
+    new_cell.population = humans - zombies + humans / 3;
     new_cell.status = 1;
     new_human_smell = new_cell.population;
   } else {
