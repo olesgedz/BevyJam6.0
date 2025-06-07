@@ -109,6 +109,7 @@ fn switch_textures(
 #[derive(Resource, Clone, ExtractResource, Default)]
 struct BoardChanges {
   unapplied_changes: bool,
+  compute_will_run: bool,
   x: usize,
   y: usize,
   board_index: usize,
@@ -292,7 +293,14 @@ fn show_board(
 struct ZombieComputePlugin;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-struct GameOfLifeLabel;
+struct ZombieGameLabel;
+
+fn tick_compute_timer(
+  time: Res<Time>,
+  mut timer: ResMut<ComputeTimer>
+) {
+  timer.0.tick(time.delta());
+}
 
 // runs during the render stage
 fn apply_board_changes(
@@ -300,14 +308,42 @@ fn apply_board_changes(
   gpu_buffers: Res<RenderAssets<GpuShaderStorageBuffer>>,
   render_queue: Res<RenderQueue>,
   board_buffers: Res<BoardBuffers>,
+  timer: Res<ComputeTimer>,
 ) {
+  // Either index works only some of the time. Since only one
+  // should work, it suggests that there's some kind of problem
+  // with ordering of changes?
+  //
+  // I bet it's because we're enqueuing it for the render graph,
+  // but we don't specify when the write should happen.
+  //
+  // We could make it part of the render graph, or we could also
+  // just make it so that this only happens when the compute
+  // won't be running. Which is probably superior anyway,
+  // because I don't think the GPU likes reading and writing
+  // from the same thing multiple times? Actually, the
+  // render graph will have tools for that.
+  //
+  // UPDATE: adding a flag to indicate if compute will run didn't
+  // work.
+  //
+  // UPDATE: Oh, the problem is that this will always run before
+  // the update method runs.
+  // 
+  // Okay, I fixed it so the flag should be the same as the compute
+  // stuff. Still broken.
+  let compute_will_run = timer.0.just_finished();
   let buffer_handle = if board_changes.board_index == 1 {
     &board_buffers.board_a
   } else {
     &board_buffers.board_b
   };
-  if board_changes.unapplied_changes {
+  if board_changes.unapplied_changes && compute_will_run {
+    log::debug!("Compute will run, unapplied changes are present");
+  }
+  if board_changes.unapplied_changes && !compute_will_run {
     log::debug!("applying unapplied changes to {}, {}", board_changes.x, board_changes.y);
+    log::debug!("board index {}\n\n", board_changes.board_index);
     let buffer = gpu_buffers.get(buffer_handle).unwrap();
     let index = (board_changes.y * SIZE.0 as usize + board_changes.x);
     let mem_location = index * std::mem::size_of::<CellState>();
@@ -341,15 +377,20 @@ impl Plugin for ZombieComputePlugin {
       apply_board_changes.in_set(RenderSet::PrepareResources),
     );
 
+    render_app.add_systems(
+      Render,
+      tick_compute_timer.before(apply_board_changes),
+    );
+
     render_app.insert_resource(ComputeTimer(Timer::new(
       Duration::from_millis(UPDATE_RATE),
       TimerMode::Repeating,
     )));
 
     let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
-    render_graph.add_node(GameOfLifeLabel, ZombieGameNode::default());
+    render_graph.add_node(ZombieGameLabel, ZombieGameNode::default());
     render_graph
-      .add_node_edge(GameOfLifeLabel, bevy::render::graph::CameraDriverLabel);
+      .add_node_edge(ZombieGameLabel, bevy::render::graph::CameraDriverLabel);
   }
 
   fn finish(&self, app: &mut App) {
@@ -497,13 +538,10 @@ impl Default for ZombieGameNode {
 
 impl render_graph::Node for ZombieGameNode {
   fn update(&mut self, world: &mut World) {
-    world.resource_scope(|world, mut timer: Mut<ComputeTimer>| {
-      let time = world.resource::<Time>();
-      let should_run = timer.0.tick(time.delta());
-      self.should_run = timer.0.just_finished();
-    });
     let pipeline = world.resource::<GameOfLifePipeline>();
     let pipeline_cache = world.resource::<PipelineCache>();
+    let timer = world.resource::<ComputeTimer>();
+    self.should_run = timer.0.just_finished();
 
     if self.should_run {
       // if the corresponding pipeline has loaded, transition to the next stage
@@ -529,10 +567,10 @@ impl render_graph::Node for ZombieGameNode {
         }
         ZombieGameState::Update(_) => unreachable!(),
       }
-    }
-    if let ZombieGameState::Update(i) = self.state {
-      let mut board_changes = world.resource_mut::<BoardChanges>();
-      board_changes.board_index = i;
+      if let ZombieGameState::Update(i) = self.state {
+        let mut changes = world.resource_mut::<BoardChanges>();
+        changes.board_index = i;
+      }
     }
   }
 
