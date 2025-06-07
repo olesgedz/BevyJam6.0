@@ -37,6 +37,7 @@ struct CellBuffer {
 // this is an overridable constant that can be changed when we
 // create the shader pipeline
 override width = 200;
+override height = 200;
 
 // @compute @workgroup_size(8, 8, 1)
 // fn init(@builtin(global_invocation_id) invocation_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
@@ -79,10 +80,18 @@ fn get_dir_delta(cell: Cell) -> vec2<i32> {
   return vec2<i32>(cell.direction_x, cell.direction_y);
 }
 
+fn is_pos_valid(pos: vec2<i32>) -> bool {
+  return pos.x >= 0 && pos.x < width && pos.y >= 0 && pos.y < height;
+  //return all(pos >= vec2(0,0)) && all(pos < vec2(height, width));
+}
+
 // x is humans, y is zombies, z is human smell, w is zombie smell
 fn incoming_from_delta(pos: vec2<i32>, delta_x: i32, delta_y: i32) -> vec4<i32> {
   let delta = vec2(delta_x, delta_y);
   let neighbor = pos + delta;
+  if !is_pos_valid(neighbor) {
+    return vec4(0, 0, 0, 0);
+  }
   let cell = load(neighbor);
   var pops = vec2(0);
   if all(get_dir_delta(cell) == (delta * -1)) {
@@ -136,9 +145,12 @@ const directions = array<vec2<i32>,8>(
 fn most_neighboring_zombie_smell(pos: vec2<i32>) -> i32 {
   var max_smell = 0;
   for (var i = 0; i < 8; i++) {
-    let cell = load(pos + directions[i]);
-    if cell.zombie_smell > max_smell {
-      max_smell = cell.zombie_smell;
+    let neighbor = pos + directions[i];
+    if is_pos_valid(neighbor) {
+      let cell = load(neighbor);
+      if cell.zombie_smell > max_smell {
+        max_smell = cell.zombie_smell;
+      }
     }
   }
   return max_smell;
@@ -148,10 +160,13 @@ fn neighbor_with_most_human_smell(pos: vec2<i32>) -> vec2<i32> {
   var max_dir = vec2<i32>();
   var max_smell = 0;
   for (var i=0; i<8; i++) {
-    let cell = load(pos + directions[i]);
-    if cell.human_smell > max_smell {
-      max_dir = directions[i];
-      max_smell = cell.human_smell;
+    let neighbor = pos + directions[i];
+    if is_pos_valid(neighbor) {
+      let cell = load(neighbor);
+      if cell.human_smell > max_smell {
+        max_dir = directions[i];
+        max_smell = cell.human_smell;
+      }
     }
   }
   return max_dir;
@@ -162,10 +177,13 @@ fn neighbor_with_least_zombie_smell(pos: vec2<i32>) -> vec2<i32> {
   var min_dir = vec2<i32>();
   var min_smell = i32(1 << 30); // A large number to initialize
   for (var i = 0; i < 8; i++) {
-    let cell = load(pos + directions[i]);
-    if cell.zombie_smell < min_smell {
-      min_dir = directions[i];
-      min_smell = cell.zombie_smell;
+    let neighbor = pos + directions[i];
+    if is_pos_valid(neighbor) {
+      let cell = load(neighbor);
+      if cell.zombie_smell < min_smell {
+        min_dir = directions[i];
+        min_smell = cell.zombie_smell;
+      }
     }
   }
   return min_dir;

@@ -9,3 +9,6 @@ pub const DISPLAY_FACTOR: u32 = 4;
 pub const SIZE: (u32, u32) = (200, 200);
 pub const WORKGROUP_SIZE: u32 = 8;
 pub const BUFFER_LEN: usize = (SIZE.0 * SIZE.1) as usize;
+
+/// How many milliseconds should pass between updates.
+pub const UPDATE_RATE: u64 = 100;

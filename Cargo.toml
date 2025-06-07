@@ -13,7 +13,7 @@ opt-level = 3
 
 [dependencies]
 # webgpu is necessary for compute shaders
-bevy = {version = "0.16.1", features = ["bevy_winit", "webgl2", "bevy_render", "bevy_core_pipeline"]}
+bevy = {version = "0.16.1", features = ["bevy_winit", "webgl2", "bevy_render", "bevy_core_pipeline", "bevy_dev_tools"]}
 bytemuck = "1.23.0"
 
 # For bevy_life
