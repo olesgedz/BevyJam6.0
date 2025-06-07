@@ -330,25 +330,33 @@ fn apply_board_changes(
   // UPDATE: Oh, the problem is that this will always run before
   // the update method runs.
   // 
-  // Okay, I fixed it so the flag should be the same as the compute
-  // stuff. Still broken.
+  // UPDATE: Okay, I fixed it so the flag should be the same as the
+  // compute stuff. Still broken.
+  //
+  // UPDATE: I fixed the bug by applying the update to both buffers.
   let compute_will_run = timer.0.just_finished();
-  let buffer_handle = if board_changes.board_index == 1 {
-    &board_buffers.board_a
-  } else {
-    &board_buffers.board_b
-  };
+  // let buffer_handle = if board_changes.board_index == 1 {
+  //   &board_buffers.board_a
+  // } else {
+  //   &board_buffers.board_b
+  // };
   if board_changes.unapplied_changes && compute_will_run {
     log::debug!("Compute will run, unapplied changes are present");
   }
   if board_changes.unapplied_changes && !compute_will_run {
     log::debug!("applying unapplied changes to {}, {}", board_changes.x, board_changes.y);
-    log::debug!("board index {}\n\n", board_changes.board_index);
-    let buffer = gpu_buffers.get(buffer_handle).unwrap();
+    //log::debug!("board index {}\n", board_changes.board_index);
+    let buffer_a = gpu_buffers.get(&board_buffers.board_a).unwrap();
+    let buffer_b = gpu_buffers.get(&board_buffers.board_b).unwrap();
     let index = (board_changes.y * SIZE.0 as usize + board_changes.x);
     let mem_location = index * std::mem::size_of::<CellState>();
     render_queue.write_buffer(
-      &buffer.buffer,
+      &buffer_b.buffer,
+      mem_location as u64,
+      bytemuck::bytes_of(&board_changes.new_cell),
+    );
+    render_queue.write_buffer(
+      &buffer_a.buffer,
       mem_location as u64,
       bytemuck::bytes_of(&board_changes.new_cell),
     );
