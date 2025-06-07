@@ -10,6 +10,7 @@ mod terrain;
 use bevy::{
   color::palettes::css::{GREEN, ROYAL_BLUE, SANDY_BROWN},
   dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin},
+  input::common_conditions::input_just_pressed,
   log::{self, LogPlugin},
   prelude::*,
   render::{
@@ -24,10 +25,11 @@ use bevy::{
       },
       *,
     },
-    renderer::{RenderContext, RenderDevice},
+    renderer::{RenderContext, RenderDevice, RenderQueue},
     storage::{GpuShaderStorageBuffer, ShaderStorageBuffer},
     texture::GpuImage,
   },
+  window::PrimaryWindow,
 };
 use bytemuck::{Pod, Zeroable};
 use constants::*;
@@ -76,9 +78,18 @@ fn main() {
       ZombieComputePlugin,
     ))
     .add_systems(Startup, setup)
-    .add_systems(Update, switch_textures)
+    .add_systems(
+      Update,
+      (
+        switch_textures,
+        place_human.run_if(input_just_pressed(MouseButton::Left)),
+      ),
+    )
     .run();
 }
+
+#[derive(Component, Copy, Clone)]
+struct BoardSprite;
 
 // Switch texture to display every frame to show the one that was written to most recently.
 //
@@ -86,12 +97,74 @@ fn main() {
 // board multiple times in a frame.
 fn switch_textures(
   buffers: Res<BoardBuffers>,
-  mut sprite: Single<&mut Sprite>,
+  mut sprite: Single<&mut Sprite, With<BoardSprite>>,
 ) {
   if sprite.image == buffers.image_a {
     sprite.image = buffers.image_b.clone_weak();
   } else {
     sprite.image = buffers.image_a.clone_weak();
+  }
+}
+
+#[derive(Resource, Clone, ExtractResource, Default)]
+struct BoardChanges {
+  unapplied_changes: bool,
+  x: usize,
+  y: usize,
+  board_index: usize,
+  new_cell: CellState,
+}
+
+//
+fn place_human(
+  board: Single<(&Transform, &Sprite), With<BoardSprite>>,
+  camera_q: Query<(&Camera, &GlobalTransform)>,
+  window_q: Query<&Window, With<PrimaryWindow>>,
+  mut board_changes: ResMut<BoardChanges>,
+) {
+  log::debug!("running place human");
+  if let Some(screen_pos) = window_q.single().unwrap().cursor_position() {
+    let (camera, camera_transform) = camera_q.single().unwrap();
+    if let Ok(world_pos) =
+      camera.viewport_to_world(camera_transform, screen_pos)
+    {
+      let world_pos = world_pos.origin.truncate();
+      log::debug!("world pos");
+      let (transform, sprite) = board.into_inner();
+      let translation = transform.translation.truncate();
+      let size =
+        Vec2::new(SIZE.0 as f32, SIZE.1 as f32) * DISPLAY_FACTOR as f32;
+      let half_size = size / 2.0;
+
+      let min = translation - half_size;
+      let max = translation + half_size;
+
+      log::debug!("world {world_pos} min {min} max {max}");
+      if world_pos.x >= min.x
+        && world_pos.x <= max.x
+        && world_pos.y >= min.y
+        && world_pos.y <= max.y
+      {
+        // Local position within the sprite
+        let local_pos = world_pos - translation + half_size;
+
+        // Get the image and calculate pixel coordinates
+        //let image_size =
+        //  Vec2::new(SIZE.0 as f32, SIZE.1 as f32) * DISPLAY_FACTOR as f32;
+
+        let uv = (local_pos / DISPLAY_FACTOR as f32).floor();
+
+        log::debug!("Clicked pixel: {uv}");
+        board_changes.x = uv.x as usize;
+        board_changes.y = SIZE.1 as usize - (uv.y as usize);
+        board_changes.new_cell = CellState {
+          stored_status: 1,
+          population: 100,
+          ..default()
+        };
+        board_changes.unapplied_changes = true;
+      }
+    }
   }
 }
 
@@ -135,6 +208,7 @@ fn setup(
   let buffer0 = buffers.add(buffer.clone());
   let buffer1 = buffers.add(buffer);
   commands.spawn((
+    BoardSprite,
     Sprite {
       image: image_handle_a.clone(),
       custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
@@ -220,15 +294,51 @@ struct ZombieComputePlugin;
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 struct GameOfLifeLabel;
 
+// runs during the render stage
+fn apply_board_changes(
+  mut board_changes: ResMut<BoardChanges>,
+  gpu_buffers: Res<RenderAssets<GpuShaderStorageBuffer>>,
+  render_queue: Res<RenderQueue>,
+  board_buffers: Res<BoardBuffers>,
+) {
+  let buffer_handle = if board_changes.board_index == 1 {
+    &board_buffers.board_a
+  } else {
+    &board_buffers.board_b
+  };
+  if board_changes.unapplied_changes {
+    log::debug!("applying unapplied changes to {}, {}", board_changes.x, board_changes.y);
+    let buffer = gpu_buffers.get(buffer_handle).unwrap();
+    let index = (board_changes.y * SIZE.0 as usize + board_changes.x);
+    let mem_location = index * std::mem::size_of::<CellState>();
+    render_queue.write_buffer(
+      &buffer.buffer,
+      mem_location as u64,
+      bytemuck::bytes_of(&board_changes.new_cell),
+    );
+    board_changes.unapplied_changes = false;
+  }
+}
+
 impl Plugin for ZombieComputePlugin {
   fn build(&self, app: &mut App) {
     // Extract the game of life image resource from the main world into the render world
     // for operation on by the compute shader and display on the sprite.
-    app.add_plugins(ExtractResourcePlugin::<BoardBuffers>::default());
+    //
+    // This is added to the main world.
+    app.add_plugins((
+      ExtractResourcePlugin::<BoardBuffers>::default(),
+      ExtractResourcePlugin::<BoardChanges>::default(),
+    ));
+    app.init_resource::<BoardChanges>();
     let render_app = app.sub_app_mut(RenderApp);
     render_app.add_systems(
       Render,
       prepare_bind_group.in_set(RenderSet::PrepareBindGroups),
+    );
+    render_app.add_systems(
+      Render,
+      apply_board_changes.in_set(RenderSet::PrepareResources),
     );
 
     render_app.insert_resource(ComputeTimer(Timer::new(
@@ -419,6 +529,10 @@ impl render_graph::Node for ZombieGameNode {
         }
         ZombieGameState::Update(_) => unreachable!(),
       }
+    }
+    if let ZombieGameState::Update(i) = self.state {
+      let mut board_changes = world.resource_mut::<BoardChanges>();
+      board_changes.board_index = i;
     }
   }
 

@@ -13,7 +13,7 @@ enum CellStatus {
   Empty, Human, Zombie
 }
 
-#[derive(Debug, Default, Clone, Copy, ShaderType)]
+#[derive(Debug, Default, Clone, Copy, ShaderType, Pod, Zeroable)]
 #[repr(C)]
 pub struct CellState {
   pub altitude: i32,
@@ -28,6 +28,7 @@ pub struct CellState {
   pub smell_zombie: i32,
 
   // for convenient alignment
+// 0 is empty, 1 is human, 2 is zombie
   pub stored_status: u32,
 }
 
