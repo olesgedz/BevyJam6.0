@@ -183,12 +183,11 @@ fn calculate_new_cell(pos: vec2<i32>) -> Cell {
   var new_human_smell = 0;
   var new_zombie_smell = 0;
 
-  // Simplified rules for population changes
   if humans == zombies {
     new_cell.population = 0;
     new_cell.status = 0;
   } else if humans > zombies {
-    new_cell.population = humans - zombies + humans / 3;
+    new_cell.population = humans - zombies;
     new_cell.status = 1;
     new_human_smell = new_cell.population;
   } else {
@@ -199,8 +198,8 @@ fn calculate_new_cell(pos: vec2<i32>) -> Cell {
   }
 
   // Update smell
-  new_cell.human_smell = cell.human_smell + neighbor_human_smell / 8 + new_human_smell;
-  new_cell.zombie_smell = cell.zombie_smell + neighbor_zombie_smell / 8 + new_zombie_smell;
+  new_cell.human_smell = (cell.human_smell + neighbor_human_smell) / 9 + new_human_smell;
+  new_cell.zombie_smell = (cell.zombie_smell + neighbor_zombie_smell) / 9 + new_zombie_smell;
 
   // Movement logic for humans
   if cell.status == 1 {
@@ -214,6 +213,7 @@ fn calculate_new_cell(pos: vec2<i32>) -> Cell {
       new_cell.direction_x = 0;
       new_cell.direction_y = 0;
     }*/
+    new_cell.population = humans + humans / 10; // Humans reproduce
   } else if cell.status == 2 {
     // Movement logic for zombies (unchanged)
     let dir = neighbor_with_most_human_smell(pos);
