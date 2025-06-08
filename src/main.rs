@@ -6,6 +6,7 @@
 mod constants;
 mod map_gen;
 mod terrain;
+mod shader_types;
 
 use bevy::{
   color::palettes::css::{GREEN, ROYAL_BLUE, SANDY_BROWN},
@@ -33,7 +34,7 @@ use bevy::{
 };
 use bytemuck::{Pod, Zeroable};
 use constants::*;
-use map_gen::CellState;
+use shader_types::*;
 use rand::Rng;
 use std::{borrow::Cow, time::Duration};
 
@@ -49,8 +50,8 @@ fn main() {
         .set(WindowPlugin {
           primary_window: Some(Window {
             resolution: (
-              (SIZE.0 * DISPLAY_FACTOR) as f32,
-              (SIZE.1 * DISPLAY_FACTOR) as f32,
+              SIZE.0 as f32 * DISPLAY_FACTOR,
+              SIZE.1 as f32 * DISPLAY_FACTOR,
             )
               .into(),
             // uncomment for unthrottled FPS
@@ -109,6 +110,7 @@ fn switch_textures(
 #[derive(Resource, Clone, ExtractResource, Default)]
 struct BoardChanges {
   unapplied_changes: bool,
+  compute_will_run: bool,
   x: usize,
   y: usize,
   board_index: usize,
@@ -133,7 +135,7 @@ fn place_human(
       let (transform, sprite) = board.into_inner();
       let translation = transform.translation.truncate();
       let size =
-        Vec2::new(SIZE.0 as f32, SIZE.1 as f32) * DISPLAY_FACTOR as f32;
+        Vec2::new(SIZE.0 as f32, SIZE.1 as f32) * DISPLAY_FACTOR;
       let half_size = size / 2.0;
 
       let min = translation - half_size;
@@ -152,7 +154,7 @@ fn place_human(
         //let image_size =
         //  Vec2::new(SIZE.0 as f32, SIZE.1 as f32) * DISPLAY_FACTOR as f32;
 
-        let uv = (local_pos / DISPLAY_FACTOR as f32).floor();
+        let uv = (local_pos / DISPLAY_FACTOR).floor();
 
         log::debug!("Clicked pixel: {uv}");
         board_changes.x = uv.x as usize;
@@ -214,7 +216,7 @@ fn setup(
       custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
       ..default()
     },
-    Transform::from_scale(Vec3::splat(DISPLAY_FACTOR as f32)),
+    Transform::from_scale(Vec3::splat(DISPLAY_FACTOR)),
   ));
 
   commands.spawn(Camera2d);
@@ -227,72 +229,17 @@ fn setup(
   });
 }
 
-/*
-#[derive(Debug, Clone, Copy, Component)]
-struct Tile(Vec2);
-
-#[derive(Resource)]
-struct TerrainMaterial(Handle<ColorMaterial>);
-
-#[derive(Resource)]
-struct ZombieMaterial(Handle<ColorMaterial>);
-
-#[derive(Resource)]
-struct HumanMaterial(Handle<ColorMaterial>);
-
-
-fn spawn_tiles(
-  mut commands: Commands,
-  mut materials: ResMut<Assets<ColorMaterial>>,
-  mut meshes: ResMut<Assets<Mesh>>,
-) {
-  let terrain_material_handle = materials.add(Color::from(SANDY_BROWN));
-  let zombie_material_handle = materials.add(Color::from(GREEN));
-  let human_material_handle = materials.add(Color::from(ROYAL_BLUE));
-
-  commands.insert_resource(TerrainMaterial(terrain_material_handle));
-  commands.insert_resource(ZombieMaterial(zombie_material_handle));
-  commands.insert_resource(HumanMaterial(human_material_handle));
-  let rect = Rectangle::from_size(Vec2::splat(1.0));
-  let rect_mesh_handle = meshes.add(rect);
-
-  for x in 0..SIZE.0 {
-    for y in 0..SIZE.1 {
-      commands.spawn((
-        Mesh2d(rect_mesh_handle),
-        MeshMaterial2d(zombie_material_handle),
-        Tile(Vec2::new(x, y)),
-        Transform {
-          translation: Vec3(DISPLAY_FACTOR * x, DISPLAY_FACTOR * y, 0.),
-          ..default()
-        },
-      ));
-    }
-  }
-}
-
-fn show_board(
-  boards: Res<BoardBuffers>,
-  terrain_material: Res<TerrainMaterial>,
-  zombie_material: Res<ZombieMaterial>,
-  human_material: Res<HumanMaterial>,
-  tiles: &mut Query<(&Tile, &mut MeshMaterial2d)>,
-) {
-  for (tile, mut mesh) in tiles {
-    /*
-    let board = boards.active();
-    mesh.0 = if board[tile.0.y * SIZE.0 + tile.0.x] {
-      zombie_material.0
-    } else { human_material.0 };
-    */
-  }
-}
-*/
-
 struct ZombieComputePlugin;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-struct GameOfLifeLabel;
+struct ZombieGameLabel;
+
+fn tick_compute_timer(
+  time: Res<Time>,
+  mut timer: ResMut<ComputeTimer>
+) {
+  timer.0.tick(time.delta());
+}
 
 // runs during the render stage
 fn apply_board_changes(
@@ -300,19 +247,60 @@ fn apply_board_changes(
   gpu_buffers: Res<RenderAssets<GpuShaderStorageBuffer>>,
   render_queue: Res<RenderQueue>,
   board_buffers: Res<BoardBuffers>,
+  timer: Res<ComputeTimer>,
 ) {
-  let buffer_handle = if board_changes.board_index == 1 {
-    &board_buffers.board_a
-  } else {
-    &board_buffers.board_b
-  };
-  if board_changes.unapplied_changes {
+  // Either index works only some of the time. Since only one
+  // should work, it suggests that there's some kind of problem
+  // with ordering of changes?
+  //
+  // I bet it's because we're enqueuing it for the render graph,
+  // but we don't specify when the write should happen.
+  //
+  // We could make it part of the render graph, or we could also
+  // just make it so that this only happens when the compute
+  // won't be running. Which is probably superior anyway,
+  // because I don't think the GPU likes reading and writing
+  // from the same thing multiple times? Actually, the
+  // render graph will have tools for that.
+  //
+  // UPDATE: adding a flag to indicate if compute will run didn't
+  // work.
+  //
+  // UPDATE: Oh, the problem is that this will always run before
+  // the update method runs.
+  // 
+  // UPDATE: Okay, I fixed it so the flag should be the same as the
+  // compute stuff. Still broken.
+  //
+  // UPDATE: I fixed the bug by applying the update to both buffers.
+  let compute_will_run = timer.0.just_finished();
+  // let buffer_handle = if board_changes.board_index == 1 {
+  //   &board_buffers.board_a
+  // } else {
+  //   &board_buffers.board_b
+  // };
+  if board_changes.unapplied_changes && compute_will_run {
+    //log::debug!("Compute will run, unapplied changes are present");
+  }
+  if board_changes.unapplied_changes && !compute_will_run {
     log::debug!("applying unapplied changes to {}, {}", board_changes.x, board_changes.y);
-    let buffer = gpu_buffers.get(buffer_handle).unwrap();
+    //log::debug!("board index {}\n", board_changes.board_index);
+    let buffer_a = gpu_buffers.get(&board_buffers.board_a).unwrap();
+    let buffer_b = gpu_buffers.get(&board_buffers.board_b).unwrap();
     let index = (board_changes.y * SIZE.0 as usize + board_changes.x);
     let mem_location = index * std::mem::size_of::<CellState>();
+    // There are types like RawBufferVec that have
+    // nicer set operations, but I think they copy the
+    // entire CPU buffer to the GPU, when we only want
+    // to change a small part because the CPU buffer will
+    // be out of date very quickly.
     render_queue.write_buffer(
-      &buffer.buffer,
+      &buffer_b.buffer,
+      mem_location as u64,
+      bytemuck::bytes_of(&board_changes.new_cell),
+    );
+    render_queue.write_buffer(
+      &buffer_a.buffer,
       mem_location as u64,
       bytemuck::bytes_of(&board_changes.new_cell),
     );
@@ -341,15 +329,20 @@ impl Plugin for ZombieComputePlugin {
       apply_board_changes.in_set(RenderSet::PrepareResources),
     );
 
+    render_app.add_systems(
+      Render,
+      tick_compute_timer.before(apply_board_changes),
+    );
+
     render_app.insert_resource(ComputeTimer(Timer::new(
       Duration::from_millis(UPDATE_RATE),
       TimerMode::Repeating,
     )));
 
     let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
-    render_graph.add_node(GameOfLifeLabel, ZombieGameNode::default());
+    render_graph.add_node(ZombieGameLabel, ZombieGameNode::default());
     render_graph
-      .add_node_edge(GameOfLifeLabel, bevy::render::graph::CameraDriverLabel);
+      .add_node_edge(ZombieGameLabel, bevy::render::graph::CameraDriverLabel);
   }
 
   fn finish(&self, app: &mut App) {
@@ -381,7 +374,19 @@ fn prepare_bind_group(
   gpu_images: Res<RenderAssets<GpuImage>>,
   board_buffers: Res<BoardBuffers>,
   render_device: Res<RenderDevice>,
+  render_queue: Res<RenderQueue>,
 ) {
+  let mut constants_buffer = UniformBuffer::from(BoardConstants {
+    width: SIZE.0 as i32,
+    height: SIZE.1 as i32,
+    padding0: 0,
+    padding1: 0,
+  });
+  constants_buffer.add_usages(BufferUsages::UNIFORM | BufferUsages::COPY_DST);
+  constants_buffer.write_buffer(&*render_device, &*render_queue);
+  let constants_binding = constants_buffer.binding()
+    .expect("Constants binding");
+
   let view_a = gpu_buffers
     .get(&board_buffers.board_a)
     .expect("board a buffer");
@@ -401,6 +406,7 @@ fn prepare_bind_group(
       view_a.buffer.as_entire_binding(),
       view_b.buffer.as_entire_binding(),
       &image_a.texture_view,
+      constants_binding.clone(),
     )),
   );
   let bind_group_1 = render_device.create_bind_group(
@@ -410,6 +416,7 @@ fn prepare_bind_group(
       view_b.buffer.as_entire_binding(),
       view_a.buffer.as_entire_binding(),
       &image_b.texture_view,
+      constants_binding,
     )),
   );
   commands.insert_resource(ZombieBoardBindGroups([bind_group_0, bind_group_1]));
@@ -432,14 +439,15 @@ impl FromWorld for GameOfLifePipeline {
         (
           storage_buffer_read_only::<Vec<CellState>>(false),
           storage_buffer::<Vec<CellState>>(false),
-          // see https://docs.rs/bevy/latest/src/custom_post_processing/custom_post_processing.rs.html#302-307
-          //uniform_buffer::<WidthSettings>(true),
           // old
           //texture_storage_2d(TextureFormat::R32Float, StorageTextureAccess::ReadOnly),
           texture_storage_2d(
             TextureFormat::Rgba8Unorm,
             StorageTextureAccess::WriteOnly,
           ),
+          // see https://docs.rs/bevy/latest/src/custom_post_processing/custom_post_processing.rs.html#302-307
+          // 
+          uniform_buffer::<BoardConstants>(false),
         ),
       ),
     );
@@ -497,13 +505,10 @@ impl Default for ZombieGameNode {
 
 impl render_graph::Node for ZombieGameNode {
   fn update(&mut self, world: &mut World) {
-    world.resource_scope(|world, mut timer: Mut<ComputeTimer>| {
-      let time = world.resource::<Time>();
-      let should_run = timer.0.tick(time.delta());
-      self.should_run = timer.0.just_finished();
-    });
     let pipeline = world.resource::<GameOfLifePipeline>();
     let pipeline_cache = world.resource::<PipelineCache>();
+    let timer = world.resource::<ComputeTimer>();
+    self.should_run = timer.0.just_finished();
 
     if self.should_run {
       // if the corresponding pipeline has loaded, transition to the next stage
@@ -529,10 +534,10 @@ impl render_graph::Node for ZombieGameNode {
         }
         ZombieGameState::Update(_) => unreachable!(),
       }
-    }
-    if let ZombieGameState::Update(i) = self.state {
-      let mut board_changes = world.resource_mut::<BoardChanges>();
-      board_changes.board_index = i;
+      if let ZombieGameState::Update(i) = self.state {
+        let mut changes = world.resource_mut::<BoardChanges>();
+        changes.board_index = i;
+      }
     }
   }
 
