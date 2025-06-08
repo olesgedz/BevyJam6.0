@@ -19,12 +19,9 @@ struct Constants {
 // read_write is required even if only writing
 @group(0) @binding(1) var<storage, read_write> output: CellBuffer;
 
-// output image
-@group(0) @binding(2) var image_out: texture_storage_2d<rgba8unorm, write>;
-
 
 // Couldn't figure out overrides
-@group(0) @binding(3) var<uniform> constants: Constants;
+@group(0) @binding(2) var<uniform> constants: Constants;
 
 // this is an overridable constant that can be changed when we
 // create the shader pipeline
@@ -54,37 +51,9 @@ fn load(location: vec2<i32>) -> Cell {
 
 fn store(location: vec2<i32>, cell: Cell) {
   output.values[location.y * constants.width + location.x] = cell;
-  let green = vec4<f32>(0., 1., 0., 1.);
-  let blue = vec4<f32>(0., 0., 1., 1.);
-
-
-  var color = vec4(0.);
-
-  if cell.status == 1 {
-      color = blue;
-  } else if cell.status == 2 {
-      color = green;
-  } else {
-
-    var max_zombie_smell: i32 = 5000;
-    var max_human_smell: i32 = 5000;
-    // darn inefficient, as it iterates over all cells per stored cell, so N^N
-    // for (var i = 0; i < i32(arrayLength(&input.values)); i++) {
-    //   max_human_smell = max(max_human_smell, input.values[i].human_smell);
-    //   max_zombie_smell = max(max_zombie_smell, input.values[i].zombie_smell);
-    // }
-
-    let human_smell_rel = max(min(f32(cell.human_smell) / f32(max_human_smell), 0.5), 0.);
-    let human_smell_color = vec4<f32>(0., 0., human_smell_rel, 0.5);
-
-    let zombie_smell_rel = max(min(f32(cell.zombie_smell) / f32(max_zombie_smell), 0.5), 0.);
-    let zombie_smell_color = vec4<f32>(0., zombie_smell_rel, 0., 0.5);
-
-    let smell_color = human_smell_color + zombie_smell_color;
-    color = smell_color;
-  }
-
-  textureStore(image_out, location, color);
+  
+  // logic relating to color is moved to the board material
+  // shader.
 }
 
 struct Population {

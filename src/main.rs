@@ -156,23 +156,6 @@ fn setup(
   mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
   mut images: ResMut<Assets<Image>>,
 ) {
-  let mut image = Image::new_fill(
-    Extent3d {
-      width: SIZE.0,
-      height: SIZE.1,
-      depth_or_array_layers: 1,
-    },
-    TextureDimension::D2,
-    &[0, 0, 0, 255],
-    TextureFormat::Rgba8Unorm,
-    RenderAssetUsages::RENDER_WORLD,
-  );
-  image.texture_descriptor.usage = TextureUsages::COPY_DST
-    | TextureUsages::STORAGE_BINDING
-    | TextureUsages::TEXTURE_BINDING
-    | TextureUsages::RENDER_ATTACHMENT;
-  let image_handle_a = images.add(image.clone());
-  let image_handle_b = images.add(image);
   let mut blank_buffer = map_gen::generate_map();
   let humans = blank_buffer
     .iter()
@@ -202,8 +185,6 @@ fn setup(
   commands.insert_resource(BoardBuffers {
     board_a: buffer0,
     board_b: buffer1,
-    image_a: image_handle_a,
-    image_b: image_handle_b,
   });
 }
 
@@ -364,19 +345,12 @@ fn prepare_bind_group(
   let view_b = gpu_buffers
     .get(&board_buffers.board_b)
     .expect("board b buffer");
-  let image_a = gpu_images
-    .get(&board_buffers.image_a)
-    .expect("image out buffer");
-  let image_b = gpu_images
-    .get(&board_buffers.image_b)
-    .expect("image out buffer");
   let bind_group_0 = render_device.create_bind_group(
     None,
     &pipeline.texture_bind_group_layout,
     &BindGroupEntries::sequential((
       view_a.buffer.as_entire_binding(),
       view_b.buffer.as_entire_binding(),
-      &image_a.texture_view,
       constants_binding.clone(),
     )),
   );
@@ -386,7 +360,6 @@ fn prepare_bind_group(
     &BindGroupEntries::sequential((
       view_b.buffer.as_entire_binding(),
       view_a.buffer.as_entire_binding(),
-      &image_b.texture_view,
       constants_binding,
     )),
   );
@@ -412,10 +385,10 @@ impl FromWorld for GameOfLifePipeline {
           storage_buffer::<Vec<CellState>>(false),
           // old
           //texture_storage_2d(TextureFormat::R32Float, StorageTextureAccess::ReadOnly),
-          texture_storage_2d(
-            TextureFormat::Rgba8Unorm,
-            StorageTextureAccess::WriteOnly,
-          ),
+          //texture_storage_2d(
+          //  TextureFormat::Rgba8Unorm,
+          //  StorageTextureAccess::WriteOnly,
+          //),
           // see https://docs.rs/bevy/latest/src/custom_post_processing/custom_post_processing.rs.html#302-307
           // 
           uniform_buffer::<BoardConstants>(false),

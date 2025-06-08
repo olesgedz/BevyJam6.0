@@ -25,7 +25,9 @@ fn load(mesh: VertexOutput) -> Cell {
   let percent_rel_to_center = (mesh.uv - .5) * 2.;
   let percent_with_zoom = percent_rel_to_center * info.zoom_factor;
   let center = (dim / 2.);
-  // relative to a central origin
+  // relative to a central origin.
+  //
+  // we're using center as being half the height and width.
   let local_coord = center * percent_with_zoom;
   let absolute = offset + center + local_coord;
   let location = vec2( i32(absolute.x), i32(absolute.y));

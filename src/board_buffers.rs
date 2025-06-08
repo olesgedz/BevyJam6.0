@@ -10,6 +10,4 @@ use bevy::{
 pub struct BoardBuffers {
   pub board_a: Handle<ShaderStorageBuffer>,
   pub board_b: Handle<ShaderStorageBuffer>,
-  pub image_a: Handle<Image>,
-  pub image_b: Handle<Image>,
 }
