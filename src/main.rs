@@ -6,6 +6,7 @@
 mod constants;
 mod map_gen;
 mod terrain;
+mod shader_types;
 
 use bevy::{
   color::palettes::css::{GREEN, ROYAL_BLUE, SANDY_BROWN},
@@ -33,7 +34,7 @@ use bevy::{
 };
 use bytemuck::{Pod, Zeroable};
 use constants::*;
-use map_gen::CellState;
+use shader_types::*;
 use rand::Rng;
 use std::{borrow::Cow, time::Duration};
 
@@ -49,8 +50,8 @@ fn main() {
         .set(WindowPlugin {
           primary_window: Some(Window {
             resolution: (
-              (SIZE.0 * DISPLAY_FACTOR) as f32,
-              (SIZE.1 * DISPLAY_FACTOR) as f32,
+              SIZE.0 as f32 * DISPLAY_FACTOR,
+              SIZE.1 as f32 * DISPLAY_FACTOR,
             )
               .into(),
             // uncomment for unthrottled FPS
@@ -134,7 +135,7 @@ fn place_human(
       let (transform, sprite) = board.into_inner();
       let translation = transform.translation.truncate();
       let size =
-        Vec2::new(SIZE.0 as f32, SIZE.1 as f32) * DISPLAY_FACTOR as f32;
+        Vec2::new(SIZE.0 as f32, SIZE.1 as f32) * DISPLAY_FACTOR;
       let half_size = size / 2.0;
 
       let min = translation - half_size;
@@ -153,7 +154,7 @@ fn place_human(
         //let image_size =
         //  Vec2::new(SIZE.0 as f32, SIZE.1 as f32) * DISPLAY_FACTOR as f32;
 
-        let uv = (local_pos / DISPLAY_FACTOR as f32).floor();
+        let uv = (local_pos / DISPLAY_FACTOR).floor();
 
         log::debug!("Clicked pixel: {uv}");
         board_changes.x = uv.x as usize;
@@ -215,7 +216,7 @@ fn setup(
       custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
       ..default()
     },
-    Transform::from_scale(Vec3::splat(DISPLAY_FACTOR as f32)),
+    Transform::from_scale(Vec3::splat(DISPLAY_FACTOR)),
   ));
 
   commands.spawn(Camera2d);
@@ -279,7 +280,7 @@ fn apply_board_changes(
   //   &board_buffers.board_b
   // };
   if board_changes.unapplied_changes && compute_will_run {
-    log::debug!("Compute will run, unapplied changes are present");
+    //log::debug!("Compute will run, unapplied changes are present");
   }
   if board_changes.unapplied_changes && !compute_will_run {
     log::debug!("applying unapplied changes to {}, {}", board_changes.x, board_changes.y);
@@ -288,6 +289,11 @@ fn apply_board_changes(
     let buffer_b = gpu_buffers.get(&board_buffers.board_b).unwrap();
     let index = (board_changes.y * SIZE.0 as usize + board_changes.x);
     let mem_location = index * std::mem::size_of::<CellState>();
+    // There are types like RawBufferVec that have
+    // nicer set operations, but I think they copy the
+    // entire CPU buffer to the GPU, when we only want
+    // to change a small part because the CPU buffer will
+    // be out of date very quickly.
     render_queue.write_buffer(
       &buffer_b.buffer,
       mem_location as u64,
@@ -368,7 +374,19 @@ fn prepare_bind_group(
   gpu_images: Res<RenderAssets<GpuImage>>,
   board_buffers: Res<BoardBuffers>,
   render_device: Res<RenderDevice>,
+  render_queue: Res<RenderQueue>,
 ) {
+  let mut constants_buffer = UniformBuffer::from(BoardConstants {
+    width: SIZE.0 as i32,
+    height: SIZE.1 as i32,
+    padding0: 0,
+    padding1: 0,
+  });
+  constants_buffer.add_usages(BufferUsages::UNIFORM | BufferUsages::COPY_DST);
+  constants_buffer.write_buffer(&*render_device, &*render_queue);
+  let constants_binding = constants_buffer.binding()
+    .expect("Constants binding");
+
   let view_a = gpu_buffers
     .get(&board_buffers.board_a)
     .expect("board a buffer");
@@ -388,6 +406,7 @@ fn prepare_bind_group(
       view_a.buffer.as_entire_binding(),
       view_b.buffer.as_entire_binding(),
       &image_a.texture_view,
+      constants_binding.clone(),
     )),
   );
   let bind_group_1 = render_device.create_bind_group(
@@ -397,6 +416,7 @@ fn prepare_bind_group(
       view_b.buffer.as_entire_binding(),
       view_a.buffer.as_entire_binding(),
       &image_b.texture_view,
+      constants_binding,
     )),
   );
   commands.insert_resource(ZombieBoardBindGroups([bind_group_0, bind_group_1]));
@@ -419,14 +439,15 @@ impl FromWorld for GameOfLifePipeline {
         (
           storage_buffer_read_only::<Vec<CellState>>(false),
           storage_buffer::<Vec<CellState>>(false),
-          // see https://docs.rs/bevy/latest/src/custom_post_processing/custom_post_processing.rs.html#302-307
-          //uniform_buffer::<WidthSettings>(true),
           // old
           //texture_storage_2d(TextureFormat::R32Float, StorageTextureAccess::ReadOnly),
           texture_storage_2d(
             TextureFormat::Rgba8Unorm,
             StorageTextureAccess::WriteOnly,
           ),
+          // see https://docs.rs/bevy/latest/src/custom_post_processing/custom_post_processing.rs.html#302-307
+          // 
+          uniform_buffer::<BoardConstants>(false),
         ),
       ),
     );

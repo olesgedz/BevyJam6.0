@@ -26,6 +26,13 @@ struct CellBuffer {
   values: array<Cell>,
 };
 
+struct Constants {
+  width: i32,
+  height: i32,
+  padding0: i32,
+  padding1: i32,
+};
+
 @group(0) @binding(0) var<storage, read> input: CellBuffer;
 
 // read_write is required even if only writing
@@ -34,10 +41,17 @@ struct CellBuffer {
 // output image
 @group(0) @binding(2) var image_out: texture_storage_2d<rgba8unorm, write>;
 
+
+// Couldn't figure out overrides
+@group(0) @binding(3) var<uniform> constants: Constants;
+
 // this is an overridable constant that can be changed when we
 // create the shader pipeline
-override width = 200;
-override height = 200;
+//
+// I can't figure out how to do this easily in bevy, so we'll use uniform
+// instead.
+//override width = 200;
+//override height = 200;
 
 // @compute @workgroup_size(8, 8, 1)
 // fn init(@builtin(global_invocation_id) invocation_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
@@ -54,11 +68,11 @@ override height = 200;
 // to deltas.
 
 fn load(location: vec2<i32>) -> Cell {
-  return input.values[location.y * width + location.x];
+  return input.values[location.y * constants.width + location.x];
 }
 
 fn store(location: vec2<i32>, value: Cell) {
-  output.values[location.y * width + location.x] = value;
+  output.values[location.y * constants.width + location.x] = value;
   let green = vec4<f32>(0., 1., 0., 1.);
   let blue = vec4<f32>(0., 0., 1., 1.);
 
@@ -81,8 +95,8 @@ fn get_dir_delta(cell: Cell) -> vec2<i32> {
 }
 
 fn is_pos_valid(pos: vec2<i32>) -> bool {
-  return pos.x >= 0 && pos.x < width && pos.y >= 0 && pos.y < height;
-  //return all(pos >= vec2(0,0)) && all(pos < vec2(height, width));
+  return pos.x >= 0 && pos.x < constants.width && pos.y >= 0 && pos.y < constants.height;
+  //return all(pos >= vec2(0,0)) && all(pos < vec2(constants.height, constants.width));
 }
 
 // x is humans, y is zombies, z is human smell, w is zombie smell

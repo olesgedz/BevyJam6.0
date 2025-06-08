@@ -1,36 +1,9 @@
 use rand::{self, Rng};
-use bytemuck::{Pod, Zeroable};
-use bevy::render::render_resource::ShaderType;
 
 use crate::constants::*;
 use crate::terrain;
 
-// 0 is empty, 1 is human, 2 is zombie
-#[derive(Debug, Default, Clone)]
-#[repr(C)]
-enum CellStatus {
-  #[default]
-  Empty, Human, Zombie
-}
-
-#[derive(Debug, Default, Clone, Copy, ShaderType, Pod, Zeroable)]
-#[repr(C)]
-pub struct CellState {
-  pub altitude: i32,
-  pub temperature: i32,
-  pub population: i32,
-  // we need an extra 4 bytes for 16 byte alignment
-  // anyway, and it's much easier in the shader
-  // to have the direction as a delta.
-  pub direction_x: i32,
-  pub direction_y: i32,
-  pub smell_human: i32,
-  pub smell_zombie: i32,
-
-  // for convenient alignment
-// 0 is empty, 1 is human, 2 is zombie
-  pub stored_status: u32,
-}
+use crate::shader_types::*;
 
 pub fn generate_map() -> Vec<CellState> {
   let terrain =
