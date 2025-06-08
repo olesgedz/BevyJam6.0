@@ -20,6 +20,12 @@ pub struct MaterialInfo {
   pub offset_y: i32,
   pub width: i32,
   pub height: i32,
+  // buffer to use
+  pub buffer_index: i32,
+  pub zoom_factor: f32,
+  // pad to 16 bytes
+  pub padding0: i32,
+  pub padding1: i32,
 }
 
 #[derive(Debug, Default, Clone, Copy, ShaderType, Pod, Zeroable)]

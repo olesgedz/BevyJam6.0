@@ -46,17 +46,24 @@ impl Material2d for DisplayMaterial {
   }
 }
 
+#[derive(Resource, Clone)]
+pub struct DisplayMatRes(Handle<DisplayMaterial>);
+
+pub fn zoom_out(
+  display_mat: Res<DisplayMatRes>,
+  mut materials: ResMut<Assets<DisplayMaterial>>,
+) {
+  let mut mat = materials.get_mut(&display_mat.0).unwrap();
+  mat.info.zoom_factor *= 0.9;
+}
+
 pub fn setup_display_board(
   mut meshes: ResMut<Assets<Mesh>>,
   mut materials: ResMut<Assets<DisplayMaterial>>,
   board_buffers: Res<BoardBuffers>,
   mut commands: Commands,
 ) {
-  let id = commands
-    .spawn((
-      DisplayBoard,
-      Mesh2d(meshes.add(Rectangle::new(SIZE.0 as f32, SIZE.1 as f32))),
-      MeshMaterial2d(materials.add(DisplayMaterial {
+  let handle = materials.add(DisplayMaterial {
         display_board: board_buffers.board_a.clone(),
         // this will eventually be the offset of our
         // view into the board.
@@ -67,10 +74,19 @@ pub fn setup_display_board(
           offset_y: 0,
           width: SIZE.0 as i32,
           height: SIZE.1 as i32,
+          zoom_factor: 1.,
+          buffer_index: 0,
+          ..default()
         },
-      })),
+      });
+  let id = commands
+    .spawn((
+      DisplayBoard,
+      Mesh2d(meshes.add(Rectangle::new(SIZE.0 as f32, SIZE.1 as f32))),
+      MeshMaterial2d(handle.clone()),
       Transform::from_scale(Vec3::splat(DISPLAY_FACTOR)),
     ))
     .id();
+  commands.insert_resource(DisplayMatRes(handle));
   log::debug!("Spawned entity {}", id);
 }

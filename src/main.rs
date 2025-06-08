@@ -19,7 +19,7 @@ use bevy::{
       },
       *,
     }, renderer::{RenderContext, RenderDevice, RenderQueue}, storage::{GpuShaderStorageBuffer, ShaderStorageBuffer}, texture::GpuImage, Render, RenderApp, RenderSet
-  }, sprite::Material2dPlugin, window::PrimaryWindow
+  }, sprite::Material2dPlugin, time::common_conditions::on_timer, window::PrimaryWindow
 };
 use bytemuck::{Pod, Zeroable};
 use constants::*;
@@ -30,7 +30,7 @@ use std::{borrow::Cow, time::Duration};
 use display::DisplayBoard;
 use board_buffers::BoardBuffers;
 
-use crate::display::{setup_display_board, DisplayMaterial};
+use crate::display::{setup_display_board, zoom_out, DisplayMaterial};
 
 fn main() {
   App::new()
@@ -78,6 +78,7 @@ fn main() {
       Update,
       (
         //switch_textures,
+        zoom_out.run_if(on_timer(Duration::from_secs(1))),
         place_human.run_if(input_just_pressed(MouseButton::Left)),
       ),
     )
