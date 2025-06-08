@@ -228,68 +228,6 @@ fn setup(
   });
 }
 
-/*
-#[derive(Debug, Clone, Copy, Component)]
-struct Tile(Vec2);
-
-#[derive(Resource)]
-struct TerrainMaterial(Handle<ColorMaterial>);
-
-#[derive(Resource)]
-struct ZombieMaterial(Handle<ColorMaterial>);
-
-#[derive(Resource)]
-struct HumanMaterial(Handle<ColorMaterial>);
-
-
-fn spawn_tiles(
-  mut commands: Commands,
-  mut materials: ResMut<Assets<ColorMaterial>>,
-  mut meshes: ResMut<Assets<Mesh>>,
-) {
-  let terrain_material_handle = materials.add(Color::from(SANDY_BROWN));
-  let zombie_material_handle = materials.add(Color::from(GREEN));
-  let human_material_handle = materials.add(Color::from(ROYAL_BLUE));
-
-  commands.insert_resource(TerrainMaterial(terrain_material_handle));
-  commands.insert_resource(ZombieMaterial(zombie_material_handle));
-  commands.insert_resource(HumanMaterial(human_material_handle));
-  let rect = Rectangle::from_size(Vec2::splat(1.0));
-  let rect_mesh_handle = meshes.add(rect);
-
-  for x in 0..SIZE.0 {
-    for y in 0..SIZE.1 {
-      commands.spawn((
-        Mesh2d(rect_mesh_handle),
-        MeshMaterial2d(zombie_material_handle),
-        Tile(Vec2::new(x, y)),
-        Transform {
-          translation: Vec3(DISPLAY_FACTOR * x, DISPLAY_FACTOR * y, 0.),
-          ..default()
-        },
-      ));
-    }
-  }
-}
-
-fn show_board(
-  boards: Res<BoardBuffers>,
-  terrain_material: Res<TerrainMaterial>,
-  zombie_material: Res<ZombieMaterial>,
-  human_material: Res<HumanMaterial>,
-  tiles: &mut Query<(&Tile, &mut MeshMaterial2d)>,
-) {
-  for (tile, mut mesh) in tiles {
-    /*
-    let board = boards.active();
-    mesh.0 = if board[tile.0.y * SIZE.0 + tile.0.x] {
-      zombie_material.0
-    } else { human_material.0 };
-    */
-  }
-}
-*/
-
 struct ZombieComputePlugin;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
