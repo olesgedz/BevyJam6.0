@@ -7,36 +7,30 @@ mod constants;
 mod map_gen;
 mod terrain;
 mod shader_types;
+mod display;
+mod board_buffers;
 
 use bevy::{
-  color::palettes::css::{GREEN, ROYAL_BLUE, SANDY_BROWN},
-  dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin},
-  input::common_conditions::input_just_pressed,
-  log::{self, LogPlugin},
-  prelude::*,
-  render::{
-    Render, RenderApp, RenderSet,
-    extract_resource::{ExtractResource, ExtractResourcePlugin},
-    render_asset::{RenderAssetUsages, RenderAssets},
-    render_graph::{self, RenderGraph, RenderLabel},
-    render_resource::{
+  color::palettes::css::{GREEN, ROYAL_BLUE, SANDY_BROWN}, dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin}, input::common_conditions::input_just_pressed, log::{self, LogPlugin}, prelude::*, render::{
+    extract_resource::{ExtractResource, ExtractResourcePlugin}, render_asset::{RenderAssetUsages, RenderAssets}, render_graph::{self, RenderGraph, RenderLabel}, render_resource::{
       binding_types::{
         storage_buffer, storage_buffer_read_only, texture_storage_2d,
         uniform_buffer,
       },
       *,
-    },
-    renderer::{RenderContext, RenderDevice, RenderQueue},
-    storage::{GpuShaderStorageBuffer, ShaderStorageBuffer},
-    texture::GpuImage,
-  },
-  window::PrimaryWindow,
+    }, renderer::{RenderContext, RenderDevice, RenderQueue}, storage::{GpuShaderStorageBuffer, ShaderStorageBuffer}, texture::GpuImage, Render, RenderApp, RenderSet
+  }, sprite::Material2dPlugin, window::PrimaryWindow
 };
 use bytemuck::{Pod, Zeroable};
 use constants::*;
 use shader_types::*;
 use rand::Rng;
 use std::{borrow::Cow, time::Duration};
+
+use display::DisplayBoard;
+use board_buffers::BoardBuffers;
+
+use crate::display::{setup_display_board, DisplayMaterial};
 
 fn main() {
   App::new()
@@ -76,35 +70,18 @@ fn main() {
           ..default()
         },
       },
+      Material2dPlugin::<DisplayMaterial>::default(),
       ZombieComputePlugin,
     ))
-    .add_systems(Startup, setup)
+    .add_systems(Startup, (setup, setup_display_board.after(setup)))
     .add_systems(
       Update,
       (
-        switch_textures,
+        //switch_textures,
         place_human.run_if(input_just_pressed(MouseButton::Left)),
       ),
     )
     .run();
-}
-
-#[derive(Component, Copy, Clone)]
-struct BoardSprite;
-
-// Switch texture to display every frame to show the one that was written to most recently.
-//
-// We need to switch because the GPU doesn't like writing and then reading from the same
-// board multiple times in a frame.
-fn switch_textures(
-  buffers: Res<BoardBuffers>,
-  mut sprite: Single<&mut Sprite, With<BoardSprite>>,
-) {
-  if sprite.image == buffers.image_a {
-    sprite.image = buffers.image_b.clone_weak();
-  } else {
-    sprite.image = buffers.image_a.clone_weak();
-  }
 }
 
 #[derive(Resource, Clone, ExtractResource, Default)]
@@ -119,7 +96,7 @@ struct BoardChanges {
 
 //
 fn place_human(
-  board: Single<(&Transform, &Sprite), With<BoardSprite>>,
+  board: Single<&Transform, With<DisplayBoard>>,
   camera_q: Query<(&Camera, &GlobalTransform)>,
   window_q: Query<&Window, With<PrimaryWindow>>,
   mut board_changes: ResMut<BoardChanges>,
@@ -132,7 +109,7 @@ fn place_human(
     {
       let world_pos = world_pos.origin.truncate();
       log::debug!("world pos");
-      let (transform, sprite) = board.into_inner();
+      let transform = board.into_inner();
       let translation = transform.translation.truncate();
       let size =
         Vec2::new(SIZE.0 as f32, SIZE.1 as f32) * DISPLAY_FACTOR;
@@ -209,15 +186,15 @@ fn setup(
   // I guess as a stop gap I could write a rendering buffer but fuck that too
   let buffer0 = buffers.add(buffer.clone());
   let buffer1 = buffers.add(buffer);
-  commands.spawn((
-    BoardSprite,
-    Sprite {
-      image: image_handle_a.clone(),
-      custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
-      ..default()
-    },
-    Transform::from_scale(Vec3::splat(DISPLAY_FACTOR)),
-  ));
+  //commands.spawn((
+  //  BoardSprite,
+  //  Sprite {
+  //    image: image_handle_a.clone(),
+  //    custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
+  //    ..default()
+  //  },
+  //  Transform::from_scale(Vec3::splat(DISPLAY_FACTOR)),
+  //));
 
   commands.spawn(Camera2d);
 
@@ -351,13 +328,6 @@ impl Plugin for ZombieComputePlugin {
   }
 }
 
-#[derive(Resource, Clone, ExtractResource)]
-struct BoardBuffers {
-  board_a: Handle<ShaderStorageBuffer>,
-  board_b: Handle<ShaderStorageBuffer>,
-  image_a: Handle<Image>,
-  image_b: Handle<Image>,
-}
 
 // The way the pipeline works, we give the pipeline a list
 // of buffers and resources when we run it that correspond to

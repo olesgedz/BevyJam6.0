@@ -12,6 +12,16 @@ pub struct BoardConstants {
   pub padding1: i32,
 }
 
+
+#[derive(Debug, Default, Clone, Copy, ShaderType, Pod, Zeroable)]
+#[repr(C)]
+pub struct MaterialInfo {
+  pub offset_x: i32,
+  pub offset_y: i32,
+  pub width: i32,
+  pub height: i32,
+}
+
 #[derive(Debug, Default, Clone, Copy, ShaderType, Pod, Zeroable)]
 #[repr(C)]
 pub struct CellState {
