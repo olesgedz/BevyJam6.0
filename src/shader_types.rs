@@ -15,6 +15,8 @@ pub struct BoardConstants {
 #[derive(Debug, Default, Clone, Copy, ShaderType, Pod, Zeroable)]
 #[repr(C)]
 pub struct CellState {
+  pub neighbors_count: i32,
+  pub edge_distance: i32,
   pub altitude: i32,
   pub temperature: i32,
   pub population: i32,
@@ -23,10 +25,12 @@ pub struct CellState {
   // to have the direction as a delta.
   pub direction_x: i32,
   pub direction_y: i32,
+  pub second_direction_x: i32,
+  pub second_direction_y: i32,
   pub smell_human: i32,
   pub smell_zombie: i32,
 
   // for convenient alignment
-// 0 is empty, 1 is human, 2 is zombie
+  // 0 is empty, 1 is human, 2 is zombie
   pub stored_status: u32,
 }

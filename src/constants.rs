@@ -4,9 +4,10 @@
 pub const SHADER_ASSET_PATH: &str = "shaders/zombie.wgsl";
 
 pub const DISPLAY_FACTOR: f32 = 1. / 2.;
-// do this once I have override working
-//const SIZE: (u32, u32) = (1280 / DISPLAY_FACTOR, 720 / DISPLAY_FACTOR);
-pub const SIZE: (u32, u32) = (1600 * 4, 1600 * 4);
+pub const SIZE: (u32, u32) = (1600, 1600);
+// big
+//pub const DISPLAY_FACTOR: f32 = 1. / 8.;
+//pub const SIZE: (u32, u32) = (1600 * 4, 1600 * 4);
 pub const WORKGROUP_SIZE: u32 = 8;
 pub const BUFFER_LEN: usize = (SIZE.0 * SIZE.1) as usize;
 
