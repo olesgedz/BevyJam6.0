@@ -5,37 +5,24 @@
 
 mod constants;
 mod map_gen;
-mod terrain;
 mod shader_types;
+mod terrain;
 
 use bevy::{
-  color::palettes::css::{GREEN, ROYAL_BLUE, SANDY_BROWN},
-  dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin},
-  input::common_conditions::input_just_pressed,
-  log::{self, LogPlugin},
-  prelude::*,
-  render::{
-    Render, RenderApp, RenderSet,
-    extract_resource::{ExtractResource, ExtractResourcePlugin},
-    render_asset::{RenderAssetUsages, RenderAssets},
-    render_graph::{self, RenderGraph, RenderLabel},
-    render_resource::{
+  color::palettes::css::{GREEN, ROYAL_BLUE, SANDY_BROWN}, dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin}, input::common_conditions::input_just_pressed, log::{self, LogPlugin}, prelude::*, render::{
+    extract_resource::{ExtractResource, ExtractResourcePlugin}, gpu_readback::{Readback, ReadbackComplete}, render_asset::{RenderAssetUsages, RenderAssets}, render_graph::{self, RenderGraph, RenderLabel}, render_resource::{
       binding_types::{
         storage_buffer, storage_buffer_read_only, texture_storage_2d,
         uniform_buffer,
       },
       *,
-    },
-    renderer::{RenderContext, RenderDevice, RenderQueue},
-    storage::{GpuShaderStorageBuffer, ShaderStorageBuffer},
-    texture::GpuImage,
-  },
-  window::PrimaryWindow,
+    }, renderer::{RenderContext, RenderDevice, RenderQueue}, storage::{GpuShaderStorageBuffer, ShaderStorageBuffer}, texture::GpuImage, Render, RenderApp, RenderSet
+  }, time::common_conditions::on_timer, window::PrimaryWindow
 };
 use bytemuck::{Pod, Zeroable};
 use constants::*;
-use shader_types::*;
 use rand::Rng;
+use shader_types::*;
 use std::{borrow::Cow, time::Duration};
 
 fn main() {
@@ -84,6 +71,7 @@ fn main() {
       (
         switch_textures,
         place_human.run_if(input_just_pressed(MouseButton::Left)),
+        perform_readback.run_if(on_timer(Duration::from_secs(1))),
       ),
     )
     .run();
@@ -134,8 +122,7 @@ fn place_human(
       log::debug!("world pos");
       let (transform, sprite) = board.into_inner();
       let translation = transform.translation.truncate();
-      let size =
-        Vec2::new(SIZE.0 as f32, SIZE.1 as f32) * DISPLAY_FACTOR;
+      let size = Vec2::new(SIZE.0 as f32, SIZE.1 as f32) * DISPLAY_FACTOR;
       let half_size = size / 2.0;
 
       let min = translation - half_size;
@@ -234,10 +221,7 @@ struct ZombieComputePlugin;
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 struct ZombieGameLabel;
 
-fn tick_compute_timer(
-  time: Res<Time>,
-  mut timer: ResMut<ComputeTimer>
-) {
+fn tick_compute_timer(time: Res<Time>, mut timer: ResMut<ComputeTimer>) {
   timer.0.tick(time.delta());
 }
 
@@ -268,7 +252,7 @@ fn apply_board_changes(
   //
   // UPDATE: Oh, the problem is that this will always run before
   // the update method runs.
-  // 
+  //
   // UPDATE: Okay, I fixed it so the flag should be the same as the
   // compute stuff. Still broken.
   //
@@ -283,7 +267,11 @@ fn apply_board_changes(
     //log::debug!("Compute will run, unapplied changes are present");
   }
   if board_changes.unapplied_changes && !compute_will_run {
-    log::debug!("applying unapplied changes to {}, {}", board_changes.x, board_changes.y);
+    log::debug!(
+      "applying unapplied changes to {}, {}",
+      board_changes.x,
+      board_changes.y
+    );
     //log::debug!("board index {}\n", board_changes.board_index);
     let buffer_a = gpu_buffers.get(&board_buffers.board_a).unwrap();
     let buffer_b = gpu_buffers.get(&board_buffers.board_b).unwrap();
@@ -329,10 +317,8 @@ impl Plugin for ZombieComputePlugin {
       apply_board_changes.in_set(RenderSet::PrepareResources),
     );
 
-    render_app.add_systems(
-      Render,
-      tick_compute_timer.before(apply_board_changes),
-    );
+    render_app
+      .add_systems(Render, tick_compute_timer.before(apply_board_changes));
 
     render_app.insert_resource(ComputeTimer(Timer::new(
       Duration::from_millis(UPDATE_RATE),
@@ -357,6 +343,29 @@ struct BoardBuffers {
   board_b: Handle<ShaderStorageBuffer>,
   image_a: Handle<Image>,
   image_b: Handle<Image>,
+}
+
+// you'll want to do something like use the bevy
+// on_timer stuff to run this at an interval.
+fn perform_readback(mut commands: Commands, board_buffers: Res<BoardBuffers>) {
+  // We spawn a component that will trigger a readback
+  // event when the data is collected.
+  commands
+    .spawn((Readback::buffer(board_buffers.board_a.clone())))
+    .observe(|trigger: Trigger<ReadbackComplete>, mut commands: Commands| {
+      // id of the target entity
+      let id = trigger.target();
+      // this entity would trigger a readback every frame,
+      // so once we've readback we remove it.
+      let Ok(mut entity) = commands.get_entity(id) else {
+        panic!("should have entity");
+      };
+      entity.despawn();
+      let data: Vec<CellState> = trigger.event().to_shader_type();
+      // now do stuff with the data
+      let human_count = data.iter().filter(|cell| cell.stored_status == 1).count();
+      log::debug!("human count {human_count}");
+    });
 }
 
 // The way the pipeline works, we give the pipeline a list
@@ -384,8 +393,8 @@ fn prepare_bind_group(
   });
   constants_buffer.add_usages(BufferUsages::UNIFORM | BufferUsages::COPY_DST);
   constants_buffer.write_buffer(&*render_device, &*render_queue);
-  let constants_binding = constants_buffer.binding()
-    .expect("Constants binding");
+  let constants_binding =
+    constants_buffer.binding().expect("Constants binding");
 
   let view_a = gpu_buffers
     .get(&board_buffers.board_a)
@@ -446,7 +455,7 @@ impl FromWorld for GameOfLifePipeline {
             StorageTextureAccess::WriteOnly,
           ),
           // see https://docs.rs/bevy/latest/src/custom_post_processing/custom_post_processing.rs.html#302-307
-          // 
+          //
           uniform_buffer::<BoardConstants>(false),
         ),
       ),
