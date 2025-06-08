@@ -15,4 +15,15 @@ opt-level = 3
 resolver = "2" # Important! wgpu/Bevy needs this!
 
 [dependencies]
-bevy = {version = "0.16.1", features = ["bevy_winit", "webgpu", "bevy_render", "bevy_core_pipeline"]}
+# webgpu is necessary for compute shaders
+bevy = { version = "0.16.1", features = ["bevy_winit", "webgl2", "bevy_render", "bevy_core_pipeline", "bevy_dev_tools"] }
+bytemuck = "1.23.0"
+
+# For bevy_life
+getrandom = { version = "0.3", features = ["wasm_js"] }
+noise = "0.9.0"
+# For bevy_life example
+rand = "0.9"
+[dependencies.bevy_life]
+git = "https://github.com/ManevilleF/bevy_life.git"
+rev = "d2f70049d3ffda496fd01ff12bbf29e7d11f115d"
