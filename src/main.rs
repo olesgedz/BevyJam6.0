@@ -30,7 +30,7 @@ use std::{borrow::Cow, time::Duration};
 use display::DisplayBoard;
 use board_buffers::BoardBuffers;
 
-use crate::display::{setup_display_board, zoom_out, DisplayMaterial};
+use crate::display::{do_zoom, setup_display_board, zoom_out, DisplayMaterial};
 
 fn main() {
   App::new()
@@ -78,7 +78,8 @@ fn main() {
       Update,
       (
         //switch_textures,
-        zoom_out.run_if(on_timer(Duration::from_secs(1))),
+        //zoom_out.run_if(on_timer(Duration::from_secs(1))),
+        do_zoom,
         place_human.run_if(input_just_pressed(MouseButton::Left)),
       ),
     )
@@ -323,7 +324,6 @@ fn prepare_bind_group(
   mut commands: Commands,
   pipeline: Res<GameOfLifePipeline>,
   gpu_buffers: Res<RenderAssets<GpuShaderStorageBuffer>>,
-  gpu_images: Res<RenderAssets<GpuImage>>,
   board_buffers: Res<BoardBuffers>,
   render_device: Res<RenderDevice>,
   render_queue: Res<RenderQueue>,
