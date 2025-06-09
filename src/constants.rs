@@ -1,5 +1,3 @@
-
-
 /// This example uses a shader source file from the assets subdirectory
 pub const SHADER_ASSET_PATH: &str = "shaders/zombie.wgsl";
 

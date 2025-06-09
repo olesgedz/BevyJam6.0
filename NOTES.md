@@ -1,5 +1,3 @@
-
-
 WebGPU is an API for more general GPU access. Firefox needs the
 `dom.webgpu.enabled` flag to use it in the latest version. (I have enabled this
 flag myself).
@@ -12,7 +10,6 @@ I think the problem is that we're asking for webgpu stuff but wgpu has
 webgl2 limits? Even on chromium or with the flag enabled, the `AdaptorInfo` from
 bevy-renderer says WebGL 2.0
 
-
 Error seems to start at
 
 ```
@@ -24,6 +21,5 @@ wgpu::api::device::Device::create_bind_group_layout
 So the problem comes from the RenderDevice resource.
 
 SupApps have their own worlds. This is useful for e.g. a render thread.
-
 
 Okay, you need to use the webgpu feature in the crate instead of the webgl2 feature.

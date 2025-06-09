@@ -1,6 +1,6 @@
 //! Types that are used to communicate with the shader.
-use bytemuck::{Pod, Zeroable};
 use bevy::render::render_resource::ShaderType;
+use bytemuck::{Pod, Zeroable};
 
 #[derive(Debug, Default, Clone, Copy, ShaderType, Pod, Zeroable)]
 #[repr(C)]
