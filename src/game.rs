@@ -125,9 +125,9 @@ fn setup_board_buffers(
 }
 
 fn is_compute_pass_active(
-  compute_pass_control: Res<ComputePassControl>,
+  compute_pass_control: Option<Res<ComputePassControl>>,
 ) -> bool {
-  return compute_pass_control.active;
+  compute_pass_control.map(|cpc| cpc.active).unwrap_or(false)
 }
 
 pub(crate) struct ZombieComputePlugin;
@@ -234,7 +234,7 @@ impl Plugin for ZombieComputePlugin {
       .init_resource::<BoardChanges>()
       .init_resource::<ComputePassControl>()
       .add_systems(
-        OnEnter(GameState::Splash),
+        OnEnter(GameState::Game),
         (
           setup_board_buffers,
           setup_display_board.after(setup_board_buffers),
@@ -264,7 +264,7 @@ impl Plugin for ZombieComputePlugin {
           prepare_bind_group.in_set(RenderSet::PrepareBindGroups),
           apply_board_changes.in_set(RenderSet::PrepareResources),
           tick_compute_timer.before(apply_board_changes),
-        )//.run_if(is_compute_pass_active)
+        ).run_if(is_compute_pass_active)
       )
       // we might be able to use an extract resource for this?
       // but this works fine
@@ -457,15 +457,14 @@ impl render_graph::Node for ZombieGameNode {
     render_context: &mut RenderContext,
     world: &World,
   ) -> Result<(), render_graph::NodeRunError> {
-    let bind_groups = &world.resource::<ZombieBoardBindGroups>().0;
-    let pipeline_cache = world.resource::<PipelineCache>();
-    let pipeline = world.resource::<ZombieGamePipeline>();
-
     if self.should_run {
       // select the pipeline based on the current state
       match self.state {
         ZombieGameState::Init => {}
         ZombieGameState::Update(index) => {
+          let bind_groups = &world.resource::<ZombieBoardBindGroups>().0;
+          let pipeline_cache = world.resource::<PipelineCache>();
+          let pipeline = world.resource::<ZombieGamePipeline>();
           let mut pass = render_context
             .command_encoder()
             .begin_compute_pass(&ComputePassDescriptor::default());
