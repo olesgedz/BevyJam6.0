@@ -32,6 +32,8 @@ pub struct DisplayBoard;
 // this material automatically displays from the buffer
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct DisplayMaterial {
+  // I did an attempt to include both buffers, but it
+  // did not work and I have no idea why.
   #[storage(0, read_only)]
   display_board: Handle<ShaderStorageBuffer>,
   // only the first two matter; rest are padding
