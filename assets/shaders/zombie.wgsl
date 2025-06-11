@@ -301,7 +301,10 @@ fn calculate_new_cell(pos: vec2<i32>) -> Cell {
       new_cell.direction_y = 0;
     }*/
 
-      new_cell.population = humans + i32(ceil(f32(humans) / 100)); // Birth / reproduction
+      // If humans hold the cell, let them reproduce. This is achieved by multiplying the population by 1.01 for a 1% increase.
+    if cell.population < humans_soft_cap {
+      new_cell.population = i32(f32(humans - zombies) * 1.01);
+    }
   } else if cell.status == 2 {
     // Movement logic for zombies (unchanged)
     let dir = zombie_preferred_neighbor(pos, vec2(0));
